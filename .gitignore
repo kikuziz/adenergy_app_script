@@ -1,0 +1,6 @@
+# Node.js priklausomybės
+# Šis aplankas gali būti labai didelis ir yra atkuriamas paleidus `npm install`
+node_modules/
+
+# `clasp` konfigūracijos failas, kuriame yra slapti prisijungimo raktai
+.clasp.json
