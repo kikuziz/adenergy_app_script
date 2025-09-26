@@ -281,6 +281,9 @@ function doGet() {
   html.pasiulymuKiekisOptions = pasiulymuKiekisOptions;
   html.pasiulymuKiekisIndex = pasiulymuKiekisIndex;
   html.kainosValues = kainosValues;
+  // Surandame ir perduodame 'id' stulpelio indeksą
+  var idIndex = headers.indexOf('id');
+  html.idIndex = idIndex;
 
   return html.evaluate().setTitle('Facebook Leads Duomenys').setWidth(1000).setHeight(600);
   } catch (e) {
@@ -328,43 +331,107 @@ function updateSheet1(rowIndex, updates) {
   }
 }
 
-function generateProposalDocument(rowIndex) {
+function generateProposalDocument(uniqueId) {
     try {
         var spreadsheet = SpreadsheetApp.openById('1KFnjVbU4P0_YlUsKOIOhtIozduQwCSfr4v78J2o3GaM');
         var sheet = spreadsheet.getSheetByName('leads');
         var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-        var data = sheet.getRange(rowIndex + 1, 1, 1, sheet.getLastColumn()).getValues()[0];
+        var allData = sheet.getDataRange().getValues();
+
+        // Surandame stulpelio, kurį naudosime kaip unikalų ID, indeksą (pvz., 'id')
+        var uniqueIdColIndex = headers.map(h => h.toLowerCase()).indexOf('id');
+        if (uniqueIdColIndex === -1) {
+            throw new Error("Nepavyko rasti 'id' stulpelio, kuris naudojamas kaip unikalus identifikatorius.");
+        }
+
+        // Surandame eilutę, atitinkančią unikalų ID
+        var rowIndex = -1;
+        var data;
+        allData.forEach((row, i) => {
+            if (i > 0 && row[uniqueIdColIndex].toString() === uniqueId) {
+                rowIndex = i; // i yra indeksas allData masyve (prasideda nuo 0)
+                data = row;
+            }
+        });
+
+        if (!data) {
+            throw new Error('Nepavyko rasti eilutės su ID: ' + uniqueId);
+        }
 
         var rowData = {};
         headers.forEach((header, i) => {
             rowData[header] = data[i];
         });
 
-        var proposalCount = rowData['pasiulymu_kiekis'] || 1; // Correctly access the lower-cased header key
-        var templateName = 'template_pasiulymas' + proposalCount;
-
-        Logger.log('Generuojamas pasiūlymas eilutei: ' + rowIndex + ' naudojant šabloną: ' + templateName);
-
-        var templateFiles = DriveApp.getFilesByName(templateName);
-        if (!templateFiles.hasNext()) {
-            throw new Error('Nepavyko rasti šablono pavadinimu "' + templateName + '" jūsų Google Drive.');
-        }
-        var templateFile = templateFiles.next();
-        var newDocFile = templateFile.makeCopy('Pasiūlymas klientui ' + (rowData['Vardas'] || rowIndex));
-        var doc = DocumentApp.openById(newDocFile.getId());
-        var body = doc.getBody();
-
-        // Pakeičiame žymeklius dokumente
-        for (var key in rowData) {
-            if (rowData.hasOwnProperty(key)) {
-                body.replaceText('{{' + key + '}}', rowData[key] || '');
+        // Patikimesnis būdas rasti 'pasiulymu_kiekis' reikšmę, nepriklausomai nuo raidžių dydžio
+        var proposalCountKey = Object.keys(rowData).find(key => key.toLowerCase() === 'pasiulymu_kiekis');
+        var proposalCount = 1; // Numatytasis, jei nerandama arba reikšmė netinkama
+        if (proposalCountKey && rowData[proposalCountKey]) {
+            var countValue = parseInt(rowData[proposalCountKey], 10);
+            if (!isNaN(countValue) && countValue > 0) {
+                proposalCount = countValue;
             }
         }
-        doc.saveAndClose();
+        var templateName = 'template_pasiulymas' + proposalCount;
+
+        Logger.log('Generuojamas pasiūlymas eilutei: ' + (rowIndex + 1) + ' naudojant šabloną: ' + templateName);
+        Logger.log('data: '+data)
+        Logger.log('rowData: ' + JSON.stringify(rowData, null, 2));
+        
+        // 1. Sukuriame naują Google Sheets failą
+        var newSpreadsheet = SpreadsheetApp.create('Pasiūlymas ' + (rowData['Vardas'] || uniqueId));
+        
+        // 2. Surandame šablono lapą (Sheet) dabartinėje lentelėje
+        var templateSheet = spreadsheet.getSheetByName(templateName);
+        if (!templateSheet) {
+            throw new Error('Nepavyko rasti šablono lapo (Sheet) pavadinimu "' + templateName + '" dabartinėje lentelėje.');
+        }
+
+        // 3. Nukopijuojame šablono lapą į naują lentelę
+        var newSheet = templateSheet.copyTo(newSpreadsheet);
+        newSheet.setName('Pasiūlymas'); // Pervadiname nukopijuotą lapą
+
+        // 4. Ištriname numatytąjį "Sheet1" lapą, kuris sukuriamas automatiškai
+        var defaultSheet = newSpreadsheet.getSheetByName('Sheet1');
+        if (defaultSheet) {
+            newSpreadsheet.deleteSheet(defaultSheet);
+        }
+
+        // 5. Pakeičiame žymeklius naujame lape
+        for (var key in rowData) {
+            newSheet.createTextFinder('{{' + key + '}}').replaceAllWith(rowData[key] || '');
+        }
     
-        return { url: doc.getUrl() };
+        return { url: newSpreadsheet.getUrl() };
     } catch (e) {
         Logger.log('Klaida generuojant dokumentą: ' + e.toString());
         throw new Error('Nepavyko sugeneruoti dokumento: ' + e.message);
     }
+
+    selectFromDropdown('1KFnjVbU4P0_YlUsKOIOhtIozduQwCSfr4v78J2o3GaM','pasiulymas',"C7","8")
+}
+
+//function sudelioti_pasiulyma(variantas){
+
+
+//}
+
+function selectFromDropdown(spreadsheetId, sheetName, range, desiredValue) {
+  try {
+    var spreadsheet = SpreadsheetApp.openById(spreadsheetId);
+    var sheet = spreadsheet.getSheetByName(sheetName);
+
+    if (!sheet) {
+      throw new Error('Lapas "' + sheetName + '" nerastas lentelėje su ID ' + spreadsheetId);
+    }
+
+    var cell = sheet.getRange(range);
+    cell.setValue(desiredValue);
+
+    Logger.log('Sėkmingai nustatyta reikšmė "' + desiredValue + '" langelyje ' + range + ' lape "' + sheetName + '".');
+    return { success: true, message: 'Reikšmė nustatyta.' };
+  } catch (e) {
+    Logger.log('Klaida vykdant selectFromDropdown: ' + e.toString());
+    throw new Error('Nepavyko nustatyti reikšmės: ' + e.message);
+  }
 }

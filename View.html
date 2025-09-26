@@ -50,6 +50,9 @@
   <input type="text" id="filterInput" placeholder="Įveskite filtravimo tekstą">
 </div>
 
+<!-- Testavimo mygtukas -->
+<button onclick="testSelectFromDropdown_client()">Testuoti Dropdown</button>
+
 <table id="dataTable">
   <tr>
     <th>Veiksmai</th>
@@ -60,7 +63,10 @@
   
   <? for (var i = 1; i < formattedData.length; i++) { ?>
     <tr>
-      <td><button class="edit-btn" onclick="showModal(<?= i ?>)">Edit</button><button class="proposal-btn" onclick="showProposalModal(<?= i ?>)">Pasiūlymas</button><button class="generate-proposal-btn" onclick="generateProposal(<?= i ?>)">Generuoti pasiūlymą</button></td>
+      <? 
+        var uniqueId = formattedData[i][idIndex].toString();
+      ?>
+      <td><button class="edit-btn" onclick="showModal(<?= i ?>)">Edit</button><button class="proposal-btn" onclick="showProposalModal(<?= i ?>)">Pasiūlymas</button><button class="generate-proposal-btn" onclick="generateProposal('<?= uniqueId ?>')">Generuoti pasiūlymą</button></td>
       <? columnIndices.forEach(function(idx) { ?>
         <td><?= formattedData[i][idx] ?></td>
       <? }); ?>
@@ -98,6 +104,8 @@
   console.log("Script loaded");
   var kainosValues = <?!= JSON.stringify(kainosValues) ?>;
   var allProposalColumns = <?!= JSON.stringify(allProposalColumns) ?>;
+  var idIndex = <?!= idIndex ?>;
+  var formattedData = <?!= JSON.stringify(formattedData) ?>;
   
   $(document).ready(function() {
     console.log("jQuery and jQuery UI loaded");
@@ -133,7 +141,11 @@
   function applyFilter() {
     var filterColumn = $("#filterColumn").val();
     var filterValue = $("#filterInput").val().toLowerCase();
-    var data = <?!= JSON.stringify(formattedData.slice(1)) ?>;
+    // Pridedame originalų indeksą, kad galėtume teisingai iškviesti modalinius langus
+    var data = formattedData.slice(1).map(function(row, index) {
+      row.originalIndex = index + 1; // +1, nes praleidžiame antraštę
+      return row;
+    });
     var indices = <?!= JSON.stringify(columnIndices) ?>;
     var displayNames = <?!= JSON.stringify(displayNames) ?>;
     var table = document.getElementById("dataTable");
@@ -148,7 +160,10 @@
       var matches = filterColumn === "all" ? row.some(function(cell) { return cell && cell.toString().toLowerCase().includes(filterValue); }) : 
         row[indices[filterColumn]] && row[indices[filterColumn]].toString().toLowerCase().includes(filterValue);
       if (matches) {
-        html += "<tr><td><button class=\"edit-btn\" onclick=\"showModal(" + (i+1) + ")\">Edit</button><button class=\"proposal-btn\" onclick=\"showProposalModal(" + (i+1) + ")\">Pasiūlymas</button><button class=\"generate-proposal-btn\" onclick=\"generateProposal(" + (i+1) + ")\">Generuoti pasiūlymą</button></td>";
+        var originalIndex = data[i].originalIndex;
+        var uniqueId = formattedData[originalIndex][idIndex].toString();
+
+        html += "<tr><td><button class=\"edit-btn\" onclick=\"showModal(" + originalIndex + ")\">Edit</button><button class=\"proposal-btn\" onclick=\"showProposalModal(" + originalIndex + ")\">Pasiūlymas</button><button class=\"generate-proposal-btn\" onclick=\"generateProposal('" + uniqueId + "')\">Generuoti pasiūlymą</button></td>";
         for (var j = 0; j < indices.length; j++) {
           var value = row[indices[j]] || "";
           html += "<td>" + value + "</td>";
@@ -303,25 +318,33 @@
     var html3 = "<tr><th>Pavadinimas</th><th>Reikšmė</th></tr>";
     for (var i = 0; i < proposalColumns.length; i++) {
       var name = proposalColumns[i].displayName || "";
-      var value = data[rowIndex-1][allProposalColumns.find(c => c.displayName === name && c.columnName.endsWith('1'))?.index] || "";
-      if (proposalColumns[i].columnName === "pasirinkite_kw1" && !value) value = "10";
+      var baseColumnName = proposalColumns[i].columnName.replace(/1$/, '');
+
+      // Paimame reikšmes kiekvienam pasiūlymui atskirai
+      var value1 = data[rowIndex-1][allProposalColumns.find(c => c.columnName === baseColumnName + '1')?.index] || "";
+      var value2 = data[rowIndex-1][allProposalColumns.find(c => c.columnName === baseColumnName + '2')?.index] || "";
+      var value3 = data[rowIndex-1][allProposalColumns.find(c => c.columnName === baseColumnName + '3')?.index] || "";
+
+      // Numatytosios reikšmės logika
+      if (baseColumnName === "pasirinkite_kw" && !value1) value1 = "10";
+
       var inputField1 = "";
       var inputField2 = "";
       var inputField3 = "";
+
       if (proposalColumns[i].editable) {
-        var baseColumnName = proposalColumns[i].columnName.replace(/1$/, '');
         console.log("Processing proposalColumns[" + i + "]: " + baseColumnName);
         if (proposalColumns[i].options.length > 0) {
           inputField1 = "<div class=\"" + baseColumnName + "_reiksme\"><div class=\"input-container\"><select id=\"input_" + baseColumnName + "_1\" size=\"1\">" + 
-            "<option value=\"\"" + (value === "" ? " selected" : "") + "></option>" + proposalColumns[i].options.map(opt => "<option value=\"" + opt + "\"" + (value.toString() === opt ? " selected" : "") + ">" + opt + "</option>").join("") + "</select></div></div>";
+            "<option value=\"\"" + (value1 === "" ? " selected" : "") + "></option>" + proposalColumns[i].options.map(opt => "<option value=\"" + opt + "\"" + (value1.toString() === opt ? " selected" : "") + ">" + opt + "</option>").join("") + "</select></div></div>";
           inputField2 = "<div class=\"" + baseColumnName + "_reiksme\"><div class=\"input-container\"><select id=\"input_" + baseColumnName + "_2\" size=\"1\">" + 
-            "<option value=\"\"" + (value === "" ? " selected" : "") + "></option>" + proposalColumns[i].options.map(opt => "<option value=\"" + opt + "\"" + (value.toString() === opt ? " selected" : "") + ">" + opt + "</option>").join("") + "</select></div></div>";
+            "<option value=\"\"" + (value2 === "" ? " selected" : "") + "></option>" + proposalColumns[i].options.map(opt => "<option value=\"" + opt + "\"" + (value2.toString() === opt ? " selected" : "") + ">" + opt + "</option>").join("") + "</select></div></div>";
           inputField3 = "<div class=\"" + baseColumnName + "_reiksme\"><div class=\"input-container\"><select id=\"input_" + baseColumnName + "_3\" size=\"1\">" + 
-            "<option value=\"\"" + (value === "" ? " selected" : "") + "></option>" + proposalColumns[i].options.map(opt => "<option value=\"" + opt + "\"" + (value.toString() === opt ? " selected" : "") + ">" + opt + "</option>").join("") + "</select></div></div>";
+            "<option value=\"\"" + (value3 === "" ? " selected" : "") + "></option>" + proposalColumns[i].options.map(opt => "<option value=\"" + opt + "\"" + (value3.toString() === opt ? " selected" : "") + ">" + opt + "</option>").join("") + "</select></div></div>";
         } else {
-          inputField1 = "<div class=\"" + baseColumnName + "_reiksme\"><div class=\"input-container\"><textarea id=\"input_" + baseColumnName + "_1\" rows=\"1\" placeholder=\"Įveskite reikšmę\">" + (value ? value.toString() : "") + "</textarea></div></div>";
-          inputField2 = "<div class=\"" + baseColumnName + "_reiksme\"><div class=\"input-container\"><textarea id=\"input_" + baseColumnName + "_2\" rows=\"1\" placeholder=\"Įveskite reikšmę\">" + (value ? value.toString() : "") + "</textarea></div></div>";
-          inputField3 = "<div class=\"" + baseColumnName + "_reiksme\"><div class=\"input-container\"><textarea id=\"input_" + baseColumnName + "_3\" rows=\"1\" placeholder=\"Įveskite reikšmę\">" + (value ? value.toString() : "") + "</textarea></div></div>";
+          inputField1 = "<div class=\"" + baseColumnName + "_reiksme\"><div class=\"input-container\"><textarea id=\"input_" + baseColumnName + "_1\" rows=\"1\" placeholder=\"Įveskite reikšmę\">" + (value1 ? value1.toString() : "") + "</textarea></div></div>";
+          inputField2 = "<div class=\"" + baseColumnName + "_reiksme\"><div class=\"input-container\"><textarea id=\"input_" + baseColumnName + "_2\" rows=\"1\" placeholder=\"Įveskite reikšmę\">" + (value2 ? value2.toString() : "") + "</textarea></div></div>";
+          inputField3 = "<div class=\"" + baseColumnName + "_reiksme\"><div class=\"input-container\"><textarea id=\"input_" + baseColumnName + "_3\" rows=\"1\" placeholder=\"Įveskite reikšmę\">" + (value3 ? value3.toString() : "") + "</textarea></div></div>";
         }
       } else {
         console.log("Processing proposalColumns[" + i + "] (non-editable): " + proposalColumns[i].columnName);
@@ -333,11 +356,11 @@
           var konstrukcijaValue = data[rowIndex-1][allProposalColumns.find(c => c.columnName === "konstrukcija1")?.index] || "";
           displayValue = konstrukcijaValue ? (konstrukcijaValue === "Tvirtinimo konstrukcija čerpė" ? kainosValues["A42"] : kainosValues["A38"]) : "";
         } else {
-          displayValue = value;
+          displayValue = value1;
         }
         inputField1 = "<div class=\"" + proposalColumns[i].columnName.replace(/1$/, '') + "_reiksme\" id=\"input_" + proposalColumns[i].columnName.replace(/1$/, '') + "_1\">" + (displayValue ? displayValue.toString() : "") + "</div>";
-        inputField2 = "<div class=\"" + proposalColumns[i].columnName.replace(/1$/, '') + "_reiksme\" id=\"input_" + proposalColumns[i].columnName.replace(/1$/, '') + "_2\">" + (displayValue ? displayValue.toString() : "") + "</div>";
-        inputField3 = "<div class=\"" + proposalColumns[i].columnName.replace(/1$/, '') + "_reiksme\" id=\"input_" + proposalColumns[i].columnName.replace(/1$/, '') + "_3\">" + (displayValue ? displayValue.toString() : "") + "</div>";
+        inputField2 = "<div class=\"" + proposalColumns[i].columnName.replace(/1$/, '') + "_reiksme\" id=\"input_" + proposalColumns[i].columnName.replace(/1$/, '') + "_2\">" + (value2 ? value2.toString() : "") + "</div>";
+        inputField3 = "<div class=\"" + proposalColumns[i].columnName.replace(/1$/, '') + "_reiksme\" id=\"input_" + proposalColumns[i].columnName.replace(/1$/, '') + "_3\">" + (value3 ? value3.toString() : "") + "</div>";
       }
       html1 += "<tr><td>" + name + "1</td><td>" + inputField1 + "</td></tr>";
       html2 += "<tr><td>" + name + "2</td><td>" + inputField2 + "</td></tr>";
@@ -452,15 +475,31 @@
       }
     }
 
+    // Išvalome nebeaktualius pasiūlymų duomenis
+    // Ciklas per pasiūlymus, kurie yra didesni nei pasirinktas kiekis (pvz., jei pasirinkta 1, ciklas suksis per 2 ir 3)
+    for (var p = pasiulymuKiekis + 1; p <= 3; p++) {
+      // Ciklas per visus galimus pasiūlymo stulpelius
+      for (var i = 0; i < proposalColumns.length; i++) {
+        var col = proposalColumns[i];
+        var baseColumnName = col.columnName.replace(/1$/, '');
+        var targetColName = baseColumnName + p;
+        var targetCol = allProposalColumns.find(c => c.columnName === targetColName);
+
+        if (targetCol) {
+          updates[targetCol.index] = { value: "", isDate: false }; // Nustatome tuščią reikšmę
+        }
+      }
+    }
+
     google.script.run
       .withSuccessHandler(function() { alert("Pasiūlymo duomenys išsaugoti!"); closeModal("proposalModal"); location.reload(); })
       .withFailureHandler(function(err) { alert("Klaida išsaugant pasiūlymą: " + err); })
       .updateSheet1(rowIndex, updates);
   }
 
-  function generateProposal(rowIndex) {
-    console.log("generateProposal called for row index: " + rowIndex);
-    alert("Generuojamas pasiūlymas... Tai gali užtrukti kelias sekundes."); 
+  function generateProposal(uniqueId) {
+    console.log("generateProposal called for uniqueId: " + uniqueId);
+    //alert("Generuojamas pasiūlymas... Tai gali užtrukti kelias sekundes."); 
     google.script.run
       .withSuccessHandler(function(response) {
         if (response && response.url) {
@@ -474,7 +513,7 @@
       .withFailureHandler(function(err) {
         alert("Klaida generuojant pasiūlymą: " + err);
       })
-      .generateProposalDocument(rowIndex);
+      .generateProposalDocument(uniqueId);
   }
 
   window.onclick = function(event) {
@@ -482,6 +521,30 @@
     var proposalModal = document.getElementById("proposalModal");
     if (event.target == modal) { closeModal("myModal"); }
     if (event.target == proposalModal) { closeModal("proposalModal"); }
+  }
+</script>
+
+<script>
+  /**
+   * Kliento pusės funkcija, skirta testuoti serverio funkciją selectFromDropdown.
+   */
+  function testSelectFromDropdown_client() {
+    // Čia įrašykite testinius duomenis
+    var spreadsheetId = '1KFnjVbU4P0_YlUsKOIOhtIozduQwCSfr4v78J2o3GaM'; // Pagrindinės lentelės ID
+    var sheetName = 'template_pasiulymas1'; // Lapo pavadinimas, kuriame norite keisti
+    var range = 'B5'; // Langelis, kurį norite keisti
+    var desiredValue = 'Huawei'; // Reikšmė, kurią norite įrašyti
+
+    alert('Vykdoma funkcija selectFromDropdown su parametrais:\nLentelė: ' + spreadsheetId + '\nLapas: ' + sheetName + '\nLangelis: ' + range + '\nReikšmė: ' + desiredValue);
+
+    google.script.run
+      .withSuccessHandler(function(response) {
+        alert('Sėkmingai įvykdyta: ' + response.message);
+      })
+      .withFailureHandler(function(err) {
+        alert('Įvyko klaida: ' + err);
+      })
+      .selectFromDropdown(spreadsheetId, sheetName, range, desiredValue);
   }
 </script>
 </body>
