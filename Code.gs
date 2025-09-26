@@ -335,6 +335,7 @@ function generateProposalDocument(uniqueId) {
     try {
         var spreadsheet = SpreadsheetApp.openById('1KFnjVbU4P0_YlUsKOIOhtIozduQwCSfr4v78J2o3GaM');
         var sheet = spreadsheet.getSheetByName('leads');
+        //var sheet_pasiulymas = spreadsheet.getSheetByName('pasiulymas');
         var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
         var allData = sheet.getDataRange().getValues();
 
@@ -401,6 +402,8 @@ function generateProposalDocument(uniqueId) {
         for (var key in rowData) {
             newSheet.createTextFinder('{{' + key + '}}').replaceAllWith(rowData[key] || '');
         }
+
+        sudelioti_pasiulyma(spreadsheet, rowData);
     
         return { url: newSpreadsheet.getUrl() };
     } catch (e) {
@@ -408,16 +411,44 @@ function generateProposalDocument(uniqueId) {
         throw new Error('Nepavyko sugeneruoti dokumento: ' + e.message);
     }
 
-    selectFromDropdown('1KFnjVbU4P0_YlUsKOIOhtIozduQwCSfr4v78J2o3GaM','pasiulymas',"C7","8")
+  
 }
  
-//function sudelioti_pasiulyma(variantas){
+function sudelioti_pasiulyma(spreadsheet,rowData){
+  try {
+    Logger.log("sudelioti_pasiulyma: " + JSON.stringify(rowData));
+    var sheet_pasiulymas = spreadsheet.getSheetByName('pasiulymas');
+    var sheet_template_pasiulymas = spreadsheet.getSheetByName('template_pasiulymas'+rowData['pasiulymu_kiekis']);
+
+    for (var i = 1; i <= rowData['pasiulymu_kiekis']; i++) {
+      //kilowatai
+      sheet_pasiulymas.getRange('C7').setValue(rowData["pasirinkite Kw"+i]);      
+      //modulai
+      sheet_pasiulymas.getRange('C8').setValue(rowData["saules moduliai"+i]);      
+      //konstrukcija
+      sheet_pasiulymas.getRange('C9').setValue(rowData["konstrukcija"+i]);
+             
+      
+      // nukopijuojame sritį iš pasiūlymo į ptemplate_pasiulymas2 lapą 
+      var sourceRange = sheet_pasiulymas.getRange('G7:G21');
+      if(i==1) var targetRange = sheet_template_pasiulymas.getRange('B14:B28');
+      if(i==2) var targetRange = sheet_template_pasiulymas.getRange('C14:C28');
+      if(i==3) var targetRange = sheet_template_pasiulymas.getRange('D14:D28');      
+      
+      sourceRange.copyTo(targetRange, {contentsOnly:true});
+    }
+  }catch (e) {
+        Logger.log('Klaida kopijuojant duomenis: ' + e.toString());
+        throw new Error('Klaida kopijuojant duomenis: ' + e.message);
+    }
 
 
-//}
+
+}
 
 function selectFromDropdown(spreadsheetId, sheetName, range, desiredValue) {
   try {
+    Logger.log('dropdown: '+spreadsheetId+' '+sheetName+' '+range+' '+desiredValue);
     var spreadsheet = SpreadsheetApp.openById(spreadsheetId);
     var sheet = spreadsheet.getSheetByName(sheetName);
 
@@ -426,7 +457,7 @@ function selectFromDropdown(spreadsheetId, sheetName, range, desiredValue) {
     }
 
     var cell = sheet.getRange(range);
-    cell.setValue(desiredValue);
+    cell.setValue(desiredValue); // Ši eilutė nustato reikšmę, bet nepakeičia išskleidžiamojo sąrašo pasirinkimo
 
     Logger.log('Sėkmingai nustatyta reikšmė "' + desiredValue + '" langelyje ' + range + ' lape "' + sheetName + '".');
     return { success: true, message: 'Reikšmė nustatyta.' };
