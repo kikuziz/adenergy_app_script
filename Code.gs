@@ -410,7 +410,7 @@ function generateProposalDocument(uniqueId) {
 
     selectFromDropdown('1KFnjVbU4P0_YlUsKOIOhtIozduQwCSfr4v78J2o3GaM','pasiulymas',"C7","8")
 }
-
+ 
 //function sudelioti_pasiulyma(variantas){
 
 
