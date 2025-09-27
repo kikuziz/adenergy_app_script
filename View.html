@@ -19,9 +19,10 @@
     .generate-proposal-btn:hover {background-color: #0069d9;}
     .date-btn {background-color: #2196F3; margin-left: 10px; vertical-align: middle;}
     .date-btn:hover {background-color: #1e88e5;}
-    .modal {display: none; position: fixed; z-index: 1; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.4);}
-    .modal-content {background-color: #fefefe; margin: 15% auto; padding: 20px; border: 1px solid #888; width: 80%; max-width: 1200px; min-width: 800px;}
+    .modal {display: none; position: fixed; z-index: 1; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.4);}
+    .modal-content {background-color: #fefefe; margin: 5% auto; padding: 20px; border: 1px solid #888; width: 70%; max-width: 1100px; min-width: 800px; max-height: 85vh; overflow-y: auto;}
     .modal-content table th, .modal-content table td {min-width: 150px; vertical-align: top;}
+    .modal-content table {width: 100%;}
     .modal-content table th {text-align: center;}
     .close {color: #aaa; float: right; font-size: 28px; font-weight: bold; cursor: pointer;}
     .close:hover {color: black;}
@@ -49,9 +50,6 @@
   </select>
   <input type="text" id="filterInput" placeholder="Įveskite filtravimo tekstą">
 </div>
-
-<!-- Testavimo mygtukas -->
-<button onclick="testSelectFromDropdown_client()">Testuoti Dropdown</button>
 
 <table id="dataTable">
   <tr>
@@ -502,9 +500,14 @@
     //alert("Generuojamas pasiūlymas... Tai gali užtrukti kelias sekundes."); 
     google.script.run
       .withSuccessHandler(function(response) {
-        if (response && response.url) {
-          alert("Pasiūlymas sugeneruotas!");
-          window.open(response.url, '_blank');
+        if (response && response.pdfUrl) {
+          alert("Pasiūlymas sėkmingai sugeneruotas! Atidaromas el. pašto klientas.");
+          
+          // Sukuriame mailto nuorodą, kuri atidarys numatytąją el. pašto programą
+          var subject = encodeURIComponent(response.subject);
+          var body = encodeURIComponent(response.body);
+          var mailtoLink = 'mailto:' + response.recipient + '?subject=' + subject + '&body=' + body;
+          window.location.href = mailtoLink;
         } else {
           alert("Pasiūlymas sugeneruotas, bet nepavyko gauti nuorodos. Patikrinkite konsolę.");
           console.log(response);
@@ -521,30 +524,6 @@
     var proposalModal = document.getElementById("proposalModal");
     if (event.target == modal) { closeModal("myModal"); }
     if (event.target == proposalModal) { closeModal("proposalModal"); }
-  }
-</script>
-
-<script>
-  /**
-   * Kliento pusės funkcija, skirta testuoti serverio funkciją selectFromDropdown.
-   */
-  function testSelectFromDropdown_client() {
-    // Čia įrašykite testinius duomenis
-    var spreadsheetId = '1KFnjVbU4P0_YlUsKOIOhtIozduQwCSfr4v78J2o3GaM'; // Pagrindinės lentelės ID
-    var sheetName = 'template_pasiulymas1'; // Lapo pavadinimas, kuriame norite keisti
-    var range = 'B5'; // Langelis, kurį norite keisti
-    var desiredValue = 'Huawei'; // Reikšmė, kurią norite įrašyti
-
-    alert('Vykdoma funkcija selectFromDropdown su parametrais:\nLentelė: ' + spreadsheetId + '\nLapas: ' + sheetName + '\nLangelis: ' + range + '\nReikšmė: ' + desiredValue);
-
-    google.script.run
-      .withSuccessHandler(function(response) {
-        alert('Sėkmingai įvykdyta: ' + response.message);
-      })
-      .withFailureHandler(function(err) {
-        alert('Įvyko klaida: ' + err);
-      })
-      .selectFromDropdown(spreadsheetId, sheetName, range, desiredValue);
   }
 </script>
 </body>

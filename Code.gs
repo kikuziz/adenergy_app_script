@@ -335,7 +335,7 @@ function generateProposalDocument(uniqueId) {
     try {
         var spreadsheet = SpreadsheetApp.openById('1KFnjVbU4P0_YlUsKOIOhtIozduQwCSfr4v78J2o3GaM');
         var sheet = spreadsheet.getSheetByName('leads');
-        //var sheet_pasiulymas = spreadsheet.getSheetByName('pasiulymas');
+        var sheet_pasiulymas = spreadsheet.getSheetByName('pasiulymas');
         var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
         var allData = sheet.getDataRange().getValues();
 
@@ -403,9 +403,48 @@ function generateProposalDocument(uniqueId) {
             newSheet.createTextFinder('{{' + key + '}}').replaceAllWith(rowData[key] || '');
         }
 
-        sudelioti_pasiulyma(spreadsheet, rowData);
-    
-        return { url: newSpreadsheet.getUrl() };
+        // 6. Iškviečiame funkciją, kuri užpildo pasiūlymo duomenis
+        sudelioti_pasiulyma(spreadsheet, newSpreadsheet, rowData);
+        
+        //return { url: newSpreadsheet.getUrl() };
+        // 7. Konvertuojame užpildytą lentelę į PDF be tinklelio
+        SpreadsheetApp.flush(); // Užtikriname, kad visi pakeitimai būtų įrašyti
+
+        var spreadsheetId = newSpreadsheet.getId();
+        var sheetId = newSheet.getSheetId();
+        var exportUrl = 'https://docs.google.com/spreadsheets/d/' + spreadsheetId + '/export?' +
+                        'exportFormat=pdf&' +
+                        'format=pdf&' +
+                        'gid=' + sheetId + '&' +
+                        'size=a4&' +           // A4 formatas
+                        'portrait=true&' +     // Vertikali orientacija
+                        'fitw=true&' +         // Talpinti pagal plotį
+                        'sheetnames=false&' +
+                        'printtitle=false&' +
+                        'gridlines=false';     // Išjungiame tinklelį
+
+        var response = UrlFetchApp.fetch(exportUrl, { headers: { 'Authorization': 'Bearer ' + ScriptApp.getOAuthToken() } });
+        var pdfBlob = response.getBlob().setName(newSpreadsheet.getName() + '.pdf');
+        var pdfFile = DriveApp.createFile(pdfBlob);
+        
+        // 8. Ištriname laikiną Google Sheets failą, kad neapkrautume disko
+        DriveApp.getFileById(newSpreadsheet.getId()).setTrashed(true);
+
+        // 9. Paruošiame duomenis laiško juodraščiui
+        var recipientEmail = rowData['email'] || ''; // Įsitikinkite, kad 'leads' lape yra stulpelis 'email'
+        var subject = 'Jūsų saulės elektrinės pasiūlymas nuo Adenergy';
+        var body = 'Sveiki, ' + (rowData['full_name'] || '') + ',\n\n' +
+                   'Pateikiame Jums paruoštą saulės elektrinės pasiūlymą.\n\n' +
+                   'Jį galite peržiūrėti paspaudę šią nuorodą:\n' + pdfFile.getUrl() + '\n\n' +
+                   'Pagarbiai,\nAdenergy komanda';
+
+        // 10. Grąžiname visą informaciją, reikalingą mailto nuorodai sukurti
+        return { 
+          pdfUrl: pdfFile.getUrl(), 
+          recipient: recipientEmail,
+          subject: subject,
+          body: body
+        };
     } catch (e) {
         Logger.log('Klaida generuojant dokumentą: ' + e.toString());
         throw new Error('Nepavyko sugeneruoti dokumento: ' + e.message);
@@ -414,29 +453,74 @@ function generateProposalDocument(uniqueId) {
   
 }
  
-function sudelioti_pasiulyma(spreadsheet,rowData){
+function sudelioti_pasiulyma(sourceSpreadsheet, targetSpreadsheet, rowData){
   try {
     Logger.log("sudelioti_pasiulyma: " + JSON.stringify(rowData));
-    var sheet_pasiulymas = spreadsheet.getSheetByName('pasiulymas');
-    var sheet_template_pasiulymas = spreadsheet.getSheetByName('template_pasiulymas'+rowData['pasiulymu_kiekis']);
+    var calculatorSheet = sourceSpreadsheet.getSheetByName('pasiulymas');
+    if (!calculatorSheet) {
+      throw new Error("Nerastas skaičiavimo lapas 'pasiulymas'.");
+    }
+
+    var targetSheet = targetSpreadsheet.getSheetByName('Pasiūlymas');
+    if (!targetSheet) {
+      throw new Error("Nerastas pasiūlymo lapas 'Pasiūlymas' naujoje lentelėje.");
+    }
 
     for (var i = 1; i <= rowData['pasiulymu_kiekis']; i++) {
       //kilowatai
-      sheet_pasiulymas.getRange('C7').setValue(rowData["pasirinkite Kw"+i]);      
+      calculatorSheet.getRange('C7').setValue(rowData["pasirinkite Kw"+i]);      
       //modulai
-      sheet_pasiulymas.getRange('C8').setValue(rowData["saules moduliai"+i]);      
+      calculatorSheet.getRange('C8').setValue(rowData["saules moduliai"+i]);      
       //konstrukcija
-      sheet_pasiulymas.getRange('C9').setValue(rowData["konstrukcija"+i]);
-             
+      calculatorSheet.getRange('C9').setValue(rowData["konstrukcija"+i]);
+
+      // Įterpiame pauzę (1000 milisekundžių = 1 sekundė), kad formulės spėtų perskaičiuoti
+      Utilities.sleep(1000);
+      SpreadsheetApp.flush(); // Užtikriname, kad visi pakeitimai būtų pritaikyti    
       
-      // nukopijuojame sritį iš pasiūlymo į ptemplate_pasiulymas2 lapą 
-      var sourceRange = sheet_pasiulymas.getRange('G7:G21');
-      if(i==1) var targetRange = sheet_template_pasiulymas.getRange('B14:B28');
-      if(i==2) var targetRange = sheet_template_pasiulymas.getRange('C14:C28');
-      if(i==3) var targetRange = sheet_template_pasiulymas.getRange('D14:D28');      
+      // Nukopijuojame perskaičiuotas reikšmes iš skaičiuoklės į naują pasiūlymo failą
+      var sourceRange = calculatorSheet.getRange('G7:G21');
+      var sourceRangeG6= calculatorSheet.getRange('G6');
+      Logger.log('Kopijuojama iš ' + sourceRange.getA1Notation() + ' lapo ' + calculatorSheet.getName());
+
+      // Nustatome tikslo stulpelį pagal pasiūlymo numerį
+      var targetColumn = String.fromCharCode('B'.charCodeAt(0) + i - 1); // B, C, D
       
-      sourceRange.copyTo(targetRange, {contentsOnly:true});
+      // Įrašome duomenis ir antraštę
+      targetSheet.getRange(targetColumn + '14:' + targetColumn + '28').setValues(sourceRange.getValues());
+      targetSheet.getRange(targetColumn + '13').setValue("Nr." + i + ". " + sourceRangeG6.getValue());
+      
+
     }
+
+    
+    var today = new Date();
+    var todayplus2weeks =new Date();
+    todayplus2weeks.setDate(today.getDate() + 14);      
+    var formattedDate_pasiulymodata = Utilities.formatDate(today, Session.getScriptTimeZone(), "yyyy-MM-dd");
+    var formattedDate_galiojaiki = Utilities.formatDate(todayplus2weeks, Session.getScriptTimeZone(), "yyyy-MM-dd");
+    var formattedDate_pasiulymonr = Utilities.formatDate(today, Session.getScriptTimeZone(), "MMdd"); 
+
+    //Pasiūlymo data: 2025-09-22 //
+    targetSheet.getRange('C2').setValue("Pasiūlymo data: "+formattedDate_pasiulymodata);
+
+    // Nustatome "Galioja iki" datą (dabartinė data + 2 savaitės)
+    targetSheet.getRange('C5').setValue("Galioja iki: "+formattedDate_galiojaiki);
+
+    //Nr. 0922-1019//B9
+    var pasiulymonr=calculatorSheet.getRange('C20').getValue();
+    pasiulymonr = pasiulymonr + 1; // Increment the value
+    calculatorSheet.getRange('C20').setValue(pasiulymonr);
+    
+    targetSheet.getRange('B9').setValue('Nr.'+formattedDate_pasiulymonr+'-'+pasiulymonr);
+    Logger.log("pasiulymo nr:"+'Nr.'+formattedDate_pasiulymonr+'-'+pasiulymonr);
+
+    //P. Deividui Podleckiui //A11
+    targetSheet.getRange('A11').setValue("Pasiūlymo gavėjas:\n"+rowData["full_name"]);
+
+    
+
+    
   }catch (e) {
         Logger.log('Klaida kopijuojant duomenis: ' + e.toString());
         throw new Error('Klaida kopijuojant duomenis: ' + e.message);
