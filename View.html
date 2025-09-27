@@ -88,6 +88,10 @@
     <div id="pasiulymai_su_pasiulymu_kiekiu">
       <label for="pasiulymu_kiekis">Pasiūlymų kiekis:</label>
       <select id="pasiulymu_kiekis"></select>
+      <div id="pasiulymu_nuorodos_container" style="margin-top: 15px; display: none;">
+        <strong>Sugeneruotų pasiūlymų nuorodos:</strong>
+        <div id="pasiulymu_nuorodos_list" style="margin-top: 5px; word-break: break-all;"></div>
+      </div>
       <div id="pasiulymai">
         <table id="pasiulymas1Table"></table>
         <table id="pasiulymas2Table"></table>
@@ -103,6 +107,9 @@
   var kainosValues = <?!= JSON.stringify(kainosValues) ?>;
   var allProposalColumns = <?!= JSON.stringify(allProposalColumns) ?>;
   var idIndex = <?!= idIndex ?>;
+  var fullNameIndex = <?!= fullNameIndex ?>;
+  var emailIndex = <?!= emailIndex ?>;
+  var linksIndex = <?!= linksIndex ?>;
   var formattedData = <?!= JSON.stringify(formattedData) ?>;
   
   $(document).ready(function() {
@@ -307,10 +314,38 @@
     var modalTable2 = document.getElementById("pasiulymas2Table");
     var modalTable3 = document.getElementById("pasiulymas3Table");
     var pasiulymuKiekisSelect = document.getElementById("pasiulymu_kiekis");    
+    var linksContainer = document.getElementById("pasiulymu_nuorodos_container");
+    var linksListDiv = document.getElementById("pasiulymu_nuorodos_list");
+    var modalTitle = modal.querySelector('h2');
     var saveBtn = document.getElementById("saveProposalBtn");
     if (!modal || !modalTable1 || !modalTable2 || !pasiulymuKiekisSelect) { console.error("Proposal modal, pasiulymas tables, or pasiulymu_kiekis not found"); return; }
     modalTable1.innerHTML = "";
     modalTable2.innerHTML = "";
+
+    // Atnaujiname modalinio lango antraštę
+    var currentRowData = data[rowIndex-1];
+    var fullName = fullNameIndex !== -1 ? currentRowData[fullNameIndex] : '';
+    var email = emailIndex !== -1 ? currentRowData[emailIndex] : '';
+    var titleText = 'Pasiūlymo duomenys';
+    if (fullName) titleText += ': ' + fullName;
+    if (email) titleText += ' (' + email + ')';
+    modalTitle.textContent = titleText;
+
+    // Atvaizduojame pasiūlymų nuorodas
+    if (linksIndex !== -1) {
+      var linksValue = currentRowData[linksIndex];
+      if (linksValue) {
+        var linksArray = linksValue.split('\n').filter(link => link.trim() !== '');
+        var linksHtml = linksArray.map(function(link, i) {
+          return (i + 1) + '. <a href="' + link + '" target="_blank">' + link + '</a>';
+        }).join('<br>');
+        linksListDiv.innerHTML = linksHtml;
+        linksContainer.style.display = 'block';
+      } else {
+        linksContainer.style.display = 'none';
+      }
+    }
+
     var html1 = "<tr><th>Pavadinimas</th><th>Reikšmė</th></tr>";
     var html2 = "<tr><th>Pavadinimas</th><th>Reikšmė</th></tr>";
     var html3 = "<tr><th>Pavadinimas</th><th>Reikšmė</th></tr>";
@@ -500,17 +535,12 @@
     //alert("Generuojamas pasiūlymas... Tai gali užtrukti kelias sekundes."); 
     google.script.run
       .withSuccessHandler(function(response) {
-        if (response && response.pdfUrl) {
-          alert("Pasiūlymas sėkmingai sugeneruotas! Atidaromas el. pašto klientas.");
-          
-          // Sukuriame mailto nuorodą, kuri atidarys numatytąją el. pašto programą
-          var subject = encodeURIComponent(response.subject);
-          var body = encodeURIComponent(response.body);
-          var mailtoLink = 'mailto:' + response.recipient + '?subject=' + subject + '&body=' + body;
-          window.location.href = mailtoLink;
+        if (response && response.success) {
+          alert("Pasiūlymas sėkmingai sugeneruotas ir išsaugotas kaip juodraštis Jūsų Gmail paskyroje!");
+          // Galima atidaryti Gmail, bet negalima tiesiogiai atidaryti juodraščio
+          // window.open('https://mail.google.com/', '_blank');
         } else {
-          alert("Pasiūlymas sugeneruotas, bet nepavyko gauti nuorodos. Patikrinkite konsolę.");
-          console.log(response);
+          alert("Įvyko klaida generuojant pasiūlymą. Patikrinkite konsolę.");
         }
       })
       .withFailureHandler(function(err) {

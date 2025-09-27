@@ -4,11 +4,11 @@
  * @returns {Object} Konfigūracijos objektas.
  */
 function loadConfiguration(spreadsheet) {
-  const sheet2 = spreadsheet.getSheetByName('configuration');
-  const sheetProposal = spreadsheet.getSheetByName('config_pasiulymas');
+  const sheet2 = spreadsheet.getSheetByName(CONFIG.SHEET_NAMES.CONFIGURATION);
+  const sheetProposal = spreadsheet.getSheetByName(CONFIG.SHEET_NAMES.PROPOSAL_CONFIG);
 
   if (!sheet2 || !sheetProposal) {
-    throw new Error('Trūksta vieno ar daugiau būtinų lapų ("configuration" arba "config_pasiulymas").');
+    throw new Error('Trūksta vieno ar daugiau būtinų lapų ("' + CONFIG.SHEET_NAMES.CONFIGURATION + '" arba "' + CONFIG.SHEET_NAMES.PROPOSAL_CONFIG + '").');
   }
 
   const sheet2Headers = sheet2.getRange(1, 1, 1, sheet2.getLastColumn()).getValues()[0];
@@ -21,7 +21,7 @@ function loadConfiguration(spreadsheet) {
 
   for (const colName of requiredColumns) {
     if (sheet2Headers.indexOf(colName) === -1) {
-      throw new Error(`Klaida: Stulpelis "${colName}" nerastas configuration lape.`);
+      throw new Error(`Klaida: Stulpelis "${colName}" nerastas ${CONFIG.SHEET_NAMES.CONFIGURATION} lape.`);
     }
   }
 
@@ -58,7 +58,7 @@ function loadConfiguration(spreadsheet) {
 
   for (const colName of requiredProposalColumns) {
     if (sheetProposalHeaders.indexOf(colName) === -1) {
-      throw new Error(`Klaida: Stulpelis "${colName}" nerastas config_pasiulymas lape.`);
+      throw new Error(`Klaida: Stulpelis "${colName}" nerastas ${CONFIG.SHEET_NAMES.PROPOSAL_CONFIG} lape.`);
     }
   }
 

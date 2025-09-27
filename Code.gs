@@ -1,10 +1,21 @@
+const CONFIG = {
+  SPREADSHEET_ID: '1KFnjVbU4P0_YlUsKOIOhtIozduQwCSfr4v78J2o3GaM',
+  SHEET_NAMES: {
+    LEADS: 'leads',
+    GENERATED_FILES_FOLDER_ID: '14lLfaWmCu949BO1VcrSlMW1JdS8yCvuA', // <-- ĮRAŠYKITE SAVO ARCHYVO/SUGENERUOTŲ FAILŲ APLANKO ID ČIA
+    CONFIGURATION: 'configuration',
+    PROPOSAL_CONFIG: 'config_pasiulymas',
+    PRICES: 'Kainos',
+    PROPOSAL_CALCULATION: 'pasiulymas',
+    PROPOSAL_TEMPLATE_PREFIX: 'template_pasiulymas',
+    NEW_PROPOSAL_SHEET: 'Pasiūlymas'
+  }
+};
+
 function doGet() {
   try {
-    var spreadsheet = SpreadsheetApp.openById('1KFnjVbU4P0_YlUsKOIOhtIozduQwCSfr4v78J2o3GaM');
-    if (!spreadsheet) {
-      return HtmlService.createHtmlOutput('<p>Klaida: Nepavyko rasti lentelės su ID "1KFnjVbU4P0_YlUsKOIOhtIozduQwCSfr4v78J2o3GaM".</p>');
-    }
-    var sheet1 = spreadsheet.getSheetByName('leads');
+    var spreadsheet = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
+    var sheet1 = spreadsheet.getSheetByName(CONFIG.SHEET_NAMES.LEADS);
     if (!sheet1) {
       return HtmlService.createHtmlOutput('<p>Klaida: Trūksta "leads" lapo.</p>');
     }
@@ -61,11 +72,11 @@ function doGet() {
   }
   
   var kainosValues = {
-    'A21': spreadsheet.getSheetByName('Kainos').getRange('A21').getValue().toString().trim(),
-    'A23': spreadsheet.getSheetByName('Kainos').getRange('A23').getValue().toString().trim(),
-    'A24': spreadsheet.getSheetByName('Kainos').getRange('A24').getValue().toString().trim(),
-    'A38': spreadsheet.getSheetByName('Kainos').getRange('A38').getValue().toString().trim(),
-    'A42': spreadsheet.getSheetByName('Kainos').getRange('A42').getValue().toString().trim()
+    'A21': spreadsheet.getSheetByName(CONFIG.SHEET_NAMES.PRICES).getRange('A21').getValue().toString().trim(),
+    'A23': spreadsheet.getSheetByName(CONFIG.SHEET_NAMES.PRICES).getRange('A23').getValue().toString().trim(),
+    'A24': spreadsheet.getSheetByName(CONFIG.SHEET_NAMES.PRICES).getRange('A24').getValue().toString().trim(),
+    'A38': spreadsheet.getSheetByName(CONFIG.SHEET_NAMES.PRICES).getRange('A38').getValue().toString().trim(),
+    'A42': spreadsheet.getSheetByName(CONFIG.SHEET_NAMES.PRICES).getRange('A42').getValue().toString().trim()
   };
   
   var columnIndices = [];
@@ -171,7 +182,7 @@ function doGet() {
   }));
   
   // Get pasiulymu_kiekis options and index
-  var pasiulymuKiekisIndex = headers.indexOf('pasiulymu_kiekis');
+  var pasiulymuKiekisIndex = headers.indexOf('pasiulymu_kiekis'); // This is a column name, not a sheet name
   var pasiulymuKiekisOptions = ['1', '2', '3']; // Leidžiame iki 3 pasiūlymų
   
   Logger.log('group1Columns: ' + JSON.stringify(group1Columns.map(col => ({ columnName: col.columnName, displayName: col.displayName }))));
@@ -285,6 +296,15 @@ function doGet() {
   var idIndex = headers.indexOf('id');
   html.idIndex = idIndex;
 
+  var fullNameIndex = headers.indexOf('full_name');
+  html.fullNameIndex = fullNameIndex;
+
+  var emailIndex = headers.indexOf('email');
+  html.emailIndex = emailIndex;
+
+  var linksIndex = headers.indexOf('pasiulymu_nuorodos');
+  html.linksIndex = linksIndex;
+
   return html.evaluate().setTitle('Facebook Leads Duomenys').setWidth(1000).setHeight(600);
   } catch (e) {
     Logger.log('Klaida vykdant doGet: ' + e.toString());
@@ -293,15 +313,10 @@ function doGet() {
 }
 
 function updateSheet1(rowIndex, updates) {
-  var spreadsheet = SpreadsheetApp.openById('1KFnjVbU4P0_YlUsKOIOhtIozduQwCSfr4v78J2o3GaM');
-  if (!spreadsheet) {
-    Logger.log('Error: Nepavyko rasti lentelės su ID "1KFnjVbU4P0_YlUsKOIOhtIozduQwCSfr4v78J2o3GaM"');
-    throw new Error('Nepavyko rasti lentelės su ID "1KFnjVbU4P0_YlUsKOIOhtIozduQwCSfr4v78J2o3GaM"');
-  }
-  var sheet = spreadsheet.getSheetByName('leads');
+  var spreadsheet = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
+  var sheet = spreadsheet.getSheetByName(CONFIG.SHEET_NAMES.LEADS);
   if (!sheet) {
-    Logger.log('Error: Lenta "leads" nerasta');
-    throw new Error('Lenta "leads" nerasta');
+    throw new Error('Lapas "' + CONFIG.SHEET_NAMES.LEADS + '" nerastas.');
   }
   var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
   
@@ -333,9 +348,8 @@ function updateSheet1(rowIndex, updates) {
 
 function generateProposalDocument(uniqueId) {
     try {
-        var spreadsheet = SpreadsheetApp.openById('1KFnjVbU4P0_YlUsKOIOhtIozduQwCSfr4v78J2o3GaM');
-        var sheet = spreadsheet.getSheetByName('leads');
-        var sheet_pasiulymas = spreadsheet.getSheetByName('pasiulymas');
+        var spreadsheet = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
+        var sheet = spreadsheet.getSheetByName(CONFIG.SHEET_NAMES.LEADS);
         var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
         var allData = sheet.getDataRange().getValues();
 
@@ -373,15 +387,27 @@ function generateProposalDocument(uniqueId) {
                 proposalCount = countValue;
             }
         }
-        var templateName = 'template_pasiulymas' + proposalCount;
+        var templateName = CONFIG.SHEET_NAMES.PROPOSAL_TEMPLATE_PREFIX + proposalCount;
 
         Logger.log('Generuojamas pasiūlymas eilutei: ' + (rowIndex + 1) + ' naudojant šabloną: ' + templateName);
         Logger.log('data: '+data)
         Logger.log('rowData: ' + JSON.stringify(rowData, null, 2));
         
-        // 1. Sukuriame naują Google Sheets failą
-        var newSpreadsheet = SpreadsheetApp.create('Pasiūlymas ' + (rowData['Vardas'] || uniqueId));
+        // 1. Sukuriame naują Google Sheets failą su pavadinimu
+        var newSpreadsheet = SpreadsheetApp.create('Ad Energy pasiūlymas ' + (rowData['full_name'] || uniqueId));
         
+        // Perkeliame sugeneruotą failą į nurodytą archyvo aplanką
+        if (CONFIG.SHEET_NAMES.GENERATED_FILES_FOLDER_ID && CONFIG.SHEET_NAMES.GENERATED_FILES_FOLDER_ID !== 'JUSU_ARCHYVO_APLANKO_ID') {
+            try {
+                var file = DriveApp.getFileById(newSpreadsheet.getId());
+                var targetFolder = DriveApp.getFolderById(CONFIG.SHEET_NAMES.GENERATED_FILES_FOLDER_ID);
+                file.moveTo(targetFolder);
+                Logger.log('Sugeneruotas pasiūlymo failas perkeltas į aplanką: ' + targetFolder.getName());
+            } catch (e) {
+                Logger.log('DĖMESIO: Nepavyko perkelti sugeneruoto failo į nurodytą aplanką. Failas liks pagrindiniame Drive aplanke. Klaida: ' + e.toString());
+            }
+        }
+
         // 2. Surandame šablono lapą (Sheet) dabartinėje lentelėje
         var templateSheet = spreadsheet.getSheetByName(templateName);
         if (!templateSheet) {
@@ -390,7 +416,7 @@ function generateProposalDocument(uniqueId) {
 
         // 3. Nukopijuojame šablono lapą į naują lentelę
         var newSheet = templateSheet.copyTo(newSpreadsheet);
-        newSheet.setName('Pasiūlymas'); // Pervadiname nukopijuotą lapą
+        newSheet.setName(CONFIG.SHEET_NAMES.NEW_PROPOSAL_SHEET); // Pervadiname nukopijuotą lapą
 
         // 4. Ištriname numatytąjį "Sheet1" lapą, kuris sukuriamas automatiškai
         var defaultSheet = newSpreadsheet.getSheetByName('Sheet1');
@@ -425,45 +451,89 @@ function generateProposalDocument(uniqueId) {
 
         var response = UrlFetchApp.fetch(exportUrl, { headers: { 'Authorization': 'Bearer ' + ScriptApp.getOAuthToken() } });
         var pdfBlob = response.getBlob().setName(newSpreadsheet.getName() + '.pdf');
-        var pdfFile = DriveApp.createFile(pdfBlob);
         
-        // 8. Ištriname laikiną Google Sheets failą, kad neapkrautume disko
-        DriveApp.getFileById(newSpreadsheet.getId()).setTrashed(true);
+        // Išsaugome PDF failą tame pačiame nurodytame aplanke
+        var pdfTargetFolder;
+        if (CONFIG.SHEET_NAMES.GENERATED_FILES_FOLDER_ID && CONFIG.SHEET_NAMES.GENERATED_FILES_FOLDER_ID !== 'JUSU_ARCHYVO_APLANKO_ID') {
+            try {
+                pdfTargetFolder = DriveApp.getFolderById(CONFIG.SHEET_NAMES.GENERATED_FILES_FOLDER_ID);
+            } catch (e) {
+                Logger.log('DĖMESIO: Nepavyko rasti nurodyto PDF aplanko. PDF bus išsaugotas pagrindiniame Drive aplanke. Klaida: ' + e.toString());
+                pdfTargetFolder = DriveApp.getRootFolder();
+            }
+        } else {
+            pdfTargetFolder = DriveApp.getRootFolder(); // Jei ID nenurodytas, išsaugome pagrindiniame aplanke
+        }
+        var pdfFile = pdfTargetFolder.createFile(pdfBlob);
+        
+        // 8. Išsaugome PDF nuorodą 'pasiulymu_nuorodos' stulpelyje
+        var pdfUrl = pdfFile.getUrl();
+        var linksColumnName = 'pasiulymu_nuorodos';
+        var linksColIndex = headers.map(h => h.toLowerCase()).indexOf(linksColumnName.toLowerCase());
 
-        // 9. Paruošiame duomenis laiško juodraščiui
+        if (linksColIndex !== -1) {
+            var linkCell = sheet.getRange(rowIndex + 1, linksColIndex + 1);
+            var existingLinks = linkCell.getValue().toString();
+            var newLinksValue;
+            if (existingLinks) {
+                newLinksValue = existingLinks + '\n' + pdfUrl; // Pridedame naują nuorodą naujoje eilutėje
+            } else {
+                newLinksValue = pdfUrl;
+            }
+            linkCell.setValue(newLinksValue);
+            Logger.log('Pasiūlymo nuoroda atnaujinta stulpelyje "' + linksColumnName + '" eilutėje ' + (rowIndex + 1));
+        } else {
+            Logger.log('DĖMESIO: Stulpelis "' + linksColumnName + '" nerastas. Pasiūlymo nuoroda nebuvo išsaugota.');
+        }
+
+        // 9. Paruošiame duomenis laiškui
         var recipientEmail = rowData['email'] || ''; // Įsitikinkite, kad 'leads' lape yra stulpelis 'email'
         var subject = 'Jūsų saulės elektrinės pasiūlymas nuo Adenergy';
         var body = 'Sveiki, ' + (rowData['full_name'] || '') + ',\n\n' +
                    'Pateikiame Jums paruoštą saulės elektrinės pasiūlymą.\n\n' +
-                   'Jį galite peržiūrėti paspaudę šią nuorodą:\n' + pdfFile.getUrl() + '\n\n' +
                    'Pagarbiai,\nAdenergy komanda';
 
-        // 10. Grąžiname visą informaciją, reikalingą mailto nuorodai sukurti
-        return { 
-          pdfUrl: pdfFile.getUrl(), 
-          recipient: recipientEmail,
-          subject: subject,
-          body: body
+        // 10. Sukuriame Gmail juodraštį
+        var fromAlias = 'info@adenergy.lt';
+        var aliases = GmailApp.getAliases();
+        var options = {
+            attachments: [pdfBlob],
+            htmlBody: body.replace(/\n/g, '<br>') // Konvertuojame naujas eilutes į <br> HTML formatui
         };
+
+        if (aliases.includes(fromAlias)) {
+            options.from = fromAlias;
+        } else {
+            Logger.log('DĖMESIO: Pseudonimas (alias) "' + fromAlias + '" nerastas. Juodraštis bus sukurtas naudojant numatytąjį siuntėją.');
+        }
+
+        var draft = GmailApp.createDraft(recipientEmail, subject, body, options);
+
+        // 11. Grąžiname informaciją klientui
+        return {
+            success: true,
+            draftId: draft.getId(),
+            message: 'Laiško juodraštis sėkmingai sukurtas.'
+        };
+
     } catch (e) {
         Logger.log('Klaida generuojant dokumentą: ' + e.toString());
         throw new Error('Nepavyko sugeneruoti dokumento: ' + e.message);
     }
 
-  
 }
  
 function sudelioti_pasiulyma(sourceSpreadsheet, targetSpreadsheet, rowData){
   try {
     Logger.log("sudelioti_pasiulyma: " + JSON.stringify(rowData));
-    var calculatorSheet = sourceSpreadsheet.getSheetByName('pasiulymas');
+    var calculatorSheet = sourceSpreadsheet.getSheetByName(CONFIG.SHEET_NAMES.PROPOSAL_CALCULATION);
     if (!calculatorSheet) {
-      throw new Error("Nerastas skaičiavimo lapas 'pasiulymas'.");
+      throw new Error("Nerastas skaičiavimo lapas '" + CONFIG.SHEET_NAMES.PROPOSAL_CALCULATION + "'.");
     }
 
-    var targetSheet = targetSpreadsheet.getSheetByName('Pasiūlymas');
+    var targetSheet = targetSpreadsheet.getSheetByName(CONFIG.SHEET_NAMES.NEW_PROPOSAL_SHEET);
     if (!targetSheet) {
-      throw new Error("Nerastas pasiūlymo lapas 'Pasiūlymas' naujoje lentelėje.");
+      throw new Error("Nerastas pasiūlymo lapas '" + CONFIG.SHEET_NAMES.NEW_PROPOSAL_SHEET + "' naujoje lentelėje.");
     }
 
     for (var i = 1; i <= rowData['pasiulymu_kiekis']; i++) {
@@ -488,9 +558,7 @@ function sudelioti_pasiulyma(sourceSpreadsheet, targetSpreadsheet, rowData){
       
       // Įrašome duomenis ir antraštę
       targetSheet.getRange(targetColumn + '14:' + targetColumn + '28').setValues(sourceRange.getValues());
-      targetSheet.getRange(targetColumn + '13').setValue("Nr." + i + ". " + sourceRangeG6.getValue());
-      
-
+      targetSheet.getRange(targetColumn + '13').setValue("Nr." + i + ". " + sourceRangeG6.getValue()); 
     }
 
     
@@ -511,13 +579,16 @@ function sudelioti_pasiulyma(sourceSpreadsheet, targetSpreadsheet, rowData){
     var pasiulymonr=calculatorSheet.getRange('C20').getValue();
     pasiulymonr = pasiulymonr + 1; // Increment the value
     calculatorSheet.getRange('C20').setValue(pasiulymonr);
+    var pasiulymo_numeris='Nr.'+formattedDate_pasiulymonr+'-'+pasiulymonr
     
-    targetSheet.getRange('B9').setValue('Nr.'+formattedDate_pasiulymonr+'-'+pasiulymonr);
-    Logger.log("pasiulymo nr:"+'Nr.'+formattedDate_pasiulymonr+'-'+pasiulymonr);
+    targetSheet.getRange('B9').setValue(pasiulymo_numeris);
+    Logger.log("pasiulymo nr:"+pasiulymo_numeris);
 
     //P. Deividui Podleckiui //A11
     targetSheet.getRange('A11').setValue("Pasiūlymo gavėjas:\n"+rowData["full_name"]);
-
+    
+    // failo vardas
+    targetSpreadsheet.setName('Ad Energy pasiūlymas ' + pasiulymo_numeris); 
     
 
     
