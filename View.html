@@ -60,9 +60,9 @@
   </tr>
   
   <? for (var i = 1; i < formattedData.length; i++) { ?>
-    <tr>
+    <tr data-original-index="<?= i ?>">
       <? 
-        var uniqueId = formattedData[i][idIndex].toString();
+        var uniqueId = formattedData[i][idIndex] ? formattedData[i][idIndex].toString() : '';
       ?>
       <td><button class="edit-btn" onclick="showModal(<?= i ?>)">Edit</button><button class="proposal-btn" onclick="showProposalModal(<?= i ?>)">Pasiūlymas</button><button class="generate-proposal-btn" onclick="generateProposal('<?= uniqueId ?>')">Generuoti pasiūlymą</button></td>
       <? columnIndices.forEach(function(idx) { ?>
@@ -141,6 +141,17 @@
     $(document).on("change", "#input_konstrukcija_3", function() {
       updateDependentFields(3);
     });
+
+    // Pridedame paspaudimo ant eilutės funkcionalumą
+    $('#dataTable').on('click', 'tbody tr', function(event) {
+      // Ignoruojame paspaudimus, kurie įvyko redagavimo formos (.edit-row) viduje,
+      // arba ant mygtukų/nuorodų pačioje duomenų eilutėje.
+      if ($(event.target).closest('.edit-row').length) { return; }
+      if ($(event.target).is('button, a') || $(event.target).closest('button, a').length) {
+        return;
+      }
+      toggleInlineEdit(this);
+    });
   });
 
   function applyFilter() {
@@ -166,9 +177,9 @@
         row[indices[filterColumn]] && row[indices[filterColumn]].toString().toLowerCase().includes(filterValue);
       if (matches) {
         var originalIndex = data[i].originalIndex;
-        var uniqueId = formattedData[originalIndex][idIndex].toString();
+        var uniqueId = formattedData[originalIndex][idIndex] ? formattedData[originalIndex][idIndex].toString() : '';
 
-        html += "<tr><td><button class=\"edit-btn\" onclick=\"showModal(" + originalIndex + ")\">Edit</button><button class=\"proposal-btn\" onclick=\"showProposalModal(" + originalIndex + ")\">Pasiūlymas</button><button class=\"generate-proposal-btn\" onclick=\"generateProposal('" + uniqueId + "')\">Generuoti pasiūlymą</button></td>";
+        html += "<tr data-original-index='" + originalIndex + "'><td><button class=\"edit-btn\" onclick=\"showModal(" + originalIndex + ")\">Edit</button><button class=\"proposal-btn\" onclick=\"showProposalModal(" + originalIndex + ")\">Pasiūlymas</button><button class=\"generate-proposal-btn\" onclick=\"generateProposal('" + uniqueId + "')\">Generuoti pasiūlymą</button></td>";
         for (var j = 0; j < indices.length; j++) {
           var value = row[indices[j]] || "";
           html += "<td>" + value + "</td>";
@@ -228,70 +239,16 @@
     for (var i = 0; i < maxRows; i++) {
       var name1 = i < group1Columns.length && group1Columns[i] ? group1Columns[i].displayName : "";
       var value1 = i < group1Columns.length && group1Columns[i] ? (data[rowIndex-1][group1Columns[i].index] || "") : "";
-      var inputField1 = "";
-      var displayValue1 = value1;
-      if (i < group1Columns.length && group1Columns[i] && group1Columns[i].editable) {
-        console.log("Processing group1Columns[" + i + "]: " + (group1Columns[i] ? group1Columns[i].columnName : "undefined"));
-        if (group1Columns[i].pasiulymoOptions.length > 0) {
-          inputField1 = "<div class=\"" + group1Columns[i].columnName + "_reiksme\"><div class=\"input-container\"><select id=\"input_" + group1Columns[i].columnName + "\" size=\"" + group1Columns[i].rowCount + "\">" + 
-            "<option value=\"\"" + (value1 === "" ? " selected" : "") + "></option>" + group1Columns[i].pasiulymoOptions.map(opt => "<option value=\"" + opt + "\"" + (value1.toString() === opt ? " selected" : "") + ">" + opt + "</option>").join("") + "</select></div></div>";
-        } else if (group1Columns[i].formulaOptions.length > 0) {
-          inputField1 = "<div class=\"" + group1Columns[i].columnName + "_reiksme\"><div class=\"input-container\"><select id=\"input_" + group1Columns[i].columnName + "\" size=\"" + group1Columns[i].rowCount + "\">" + 
-            "<option value=\"\"" + (value1 === "" ? " selected" : "") + "></option>" + group1Columns[i].formulaOptions.map(opt => "<option value=\"" + opt + "\"" + (value1.toString() === opt ? " selected" : "") + ">" + opt + "</option>").join("") + "</select></div></div>";
-        } else if (group1Columns[i].options.length > 0) {
-          inputField1 = "<div class=\"" + group1Columns[i].columnName + "_reiksme\"><div class=\"input-container\"><select id=\"input_" + group1Columns[i].columnName + "\" size=\"" + group1Columns[i].rowCount + "\">" + 
-            "<option value=\"\"" + (value1 === "" ? " selected" : "") + "></option>" + group1Columns[i].options.map(opt => "<option value=\"" + opt + "\"" + (value1.toString() === opt ? " selected" : "") + ">" + opt + "</option>").join("") + "</select></div></div>";
-        } else if (group1Columns[i].hasDatePicker) {
-          displayValue1 = value1 && group1Columns[i].isDateTime && value1.includes(" ") ? value1.split(" ")[0] : value1;
-          inputField1 = "<div class=\"" + group1Columns[i].columnName + "_reiksme\"><div class=\"input-container\"><input type=\"text\" id=\"input_" + group1Columns[i].columnName + "\" class=\"datepicker\" value=\"" + (displayValue1 || "") + "\" placeholder=\"Įveskite datą\"></div></div>";
-        } else {
-          inputField1 = "<div class=\"" + group1Columns[i].columnName + "_reiksme\"><div class=\"input-container\"><textarea id=\"input_" + group1Columns[i].columnName + "\" rows=\"" + group1Columns[i].rowCount + "\" placeholder=\"Įveskite reikšmę\">" + (value1 ? value1.toString() : "") + "</textarea>";
-          if (group1Columns[i].dateButton) {
-            var dateValue = new Date().toLocaleString("lt-LT", {timeZone: "Europe/Vilnius", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit"}).replace(", ", " ").replace(/\./g, "-");
-            inputField1 += "<button class=\"date-btn\" onclick=\"document.getElementById('input_" + group1Columns[i].columnName + "').value = '" + dateValue + "'\">Dabar</button>";
-          }
-          inputField1 += "</div></div>";
-        }
-      } else if (i < group1Columns.length && group1Columns[i]) {
-        console.log("Processing group1Columns[" + i + "] (non-editable): " + group1Columns[i].columnName);
-        inputField1 = "<div class=\"" + group1Columns[i].columnName + "_reiksme\">" + (value1 ? value1.toString() : "") + "</div>";
-      } else {
-        console.log("group1Columns[" + i + "] is undefined or missing");
-        inputField1 = "";
-      }
+      var inputField1 = (i < group1Columns.length && group1Columns[i] && group1Columns[i].editable) 
+                        ? createInputField(group1Columns[i], value1) 
+                        : ("<div class=\"" + (group1Columns[i] ? group1Columns[i].columnName : '') + "_reiksme\">" + (value1 ? value1.toString() : "") + "</div>");
+
       var name2 = i < group2Columns.length && group2Columns[i] ? group2Columns[i].displayName : "";
       var value2 = i < group2Columns.length && group2Columns[i] ? (data[rowIndex-1][group2Columns[i].index] || "") : "";
-      var inputField2 = "";
-      var displayValue2 = value2;
-      if (i < group2Columns.length && group2Columns[i] && group2Columns[i].editable) {
-        console.log("Processing group2Columns[" + i + "]: " + (group2Columns[i] ? group2Columns[i].columnName : "undefined"));
-        if (group2Columns[i].pasiulymoOptions.length > 0) {
-          inputField2 = "<div class=\"" + group2Columns[i].columnName + "_reiksme\"><div class=\"input-container\"><select id=\"input_" + group2Columns[i].columnName + "\" size=\"" + group2Columns[i].rowCount + "\">" + 
-            "<option value=\"\"" + (value2 === "" ? " selected" : "") + "></option>" + group2Columns[i].pasiulymoOptions.map(opt => "<option value=\"" + opt + "\"" + (value2.toString() === opt ? " selected" : "") + ">" + opt + "</option>").join("") + "</select></div></div>";
-        } else if (group2Columns[i].formulaOptions.length > 0) {
-          inputField2 = "<div class=\"" + group2Columns[i].columnName + "_reiksme\"><div class=\"input-container\"><select id=\"input_" + group2Columns[i].columnName + "\" size=\"" + group2Columns[i].rowCount + "\">" + 
-            "<option value=\"\"" + (value2 === "" ? " selected" : "") + "></option>" + group2Columns[i].formulaOptions.map(opt => "<option value=\"" + opt + "\"" + (value2.toString() === opt ? " selected" : "") + ">" + opt + "</option>").join("") + "</select></div></div>";
-        } else if (group2Columns[i].options.length > 0) {
-          inputField2 = "<div class=\"" + group2Columns[i].columnName + "_reiksme\"><div class=\"input-container\"><select id=\"input_" + group2Columns[i].columnName + "\" size=\"" + group2Columns[i].rowCount + "\">" + 
-            "<option value=\"\"" + (value2 === "" ? " selected" : "") + "></option>" + group2Columns[i].options.map(opt => "<option value=\"" + opt + "\"" + (value2.toString() === opt ? " selected" : "") + ">" + opt + "</option>").join("") + "</select></div></div>";
-        } else if (group2Columns[i].hasDatePicker) {
-          displayValue2 = value2 && group2Columns[i].isDateTime && value2.includes(" ") ? value2.split(" ")[0] : value2;
-          inputField2 = "<div class=\"" + group2Columns[i].columnName + "_reiksme\"><div class=\"input-container\"><input type=\"text\" id=\"input_" + group2Columns[i].columnName + "\" class=\"datepicker\" value=\"" + (displayValue2 || "") + "\" placeholder=\"Įveskite datą\"></div></div>";
-        } else {
-          inputField2 = "<div class=\"" + group2Columns[i].columnName + "_reiksme\"><div class=\"input-container\"><textarea id=\"input_" + group2Columns[i].columnName + "\" rows=\"" + group2Columns[i].rowCount + "\" placeholder=\"Įveskite reikšmę\">" + (value2 ? value2.toString() : "") + "</textarea>";
-          if (group2Columns[i].dateButton) {
-            var dateValue = new Date().toLocaleString("lt-LT", {timeZone: "Europe/Vilnius", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit"}).replace(", ", " ").replace(/\./g, "-");
-            inputField2 += "<button class=\"date-btn\" onclick=\"document.getElementById('input_" + group2Columns[i].columnName + "').value = '" + dateValue + "'\">Dabar</button>";
-          }
-          inputField2 += "</div></div>";
-        }
-      } else if (i < group2Columns.length && group2Columns[i]) {
-        console.log("Processing group2Columns[" + i + "] (non-editable): " + group2Columns[i].columnName);
-        inputField2 = "<div class=\"" + group2Columns[i].columnName + "_reiksme\">" + (value2 ? value2.toString() : "") + "</div>";
-      } else {
-        console.log("group2Columns[" + i + "] is undefined or missing");
-        inputField2 = "";
-      }
+      var inputField2 = (i < group2Columns.length && group2Columns[i] && group2Columns[i].editable) 
+                        ? createInputField(group2Columns[i], value2) 
+                        : ("<div class=\"" + (group2Columns[i] ? group2Columns[i].columnName : '') + "_reiksme\">" + (value2 ? value2.toString() : "") + "</div>");
+
       html += "<tr><td>" + name1 + "</td><td>" + inputField1 + "</td><td>" + name2 + "</td><td>" + inputField2 + "</td></tr>";
     }
     console.log("issiokantiTable HTML: " + html);
@@ -336,8 +293,13 @@
       var linksValue = currentRowData[linksIndex];
       if (linksValue) {
         var linksArray = linksValue.split('\n').filter(link => link.trim() !== '');
-        var linksHtml = linksArray.map(function(link, i) {
-          return (i + 1) + '. <a href="' + link + '" target="_blank">' + link + '</a>';
+        var linksHtml = linksArray.map(function(linkData, i) {
+          var parts = linkData.split('|');
+          var url = parts[0];
+          var date = parts.length > 1 ? parts[1] : '';
+          var dateHtml = date ? ' <span style="color: #888; font-size: 0.9em;">(' + date + ')</span>' : '';
+
+          return (i + 1) + '. <a href="' + url + '" target="_blank">' + url + '</a>' + dateHtml;
         }).join('<br>');
         linksListDiv.innerHTML = linksHtml;
         linksContainer.style.display = 'block';
@@ -547,6 +509,74 @@
         alert("Klaida generuojant pasiūlymą: " + err);
       })
       .generateProposalDocument(uniqueId);
+  }
+
+  function toggleInlineEdit(rowElement) {
+    var $row = $(rowElement);
+    var nextRow = $row.next();
+
+    // Jei redagavimo forma šiai eilutei jau atidaryta, nieko nedaryti.
+    if (nextRow.hasClass('edit-row')) {
+      return;
+    }
+
+    // Pašaliname visas kitas atidarytas redagavimo formas
+    $('.edit-row').remove();
+
+    var originalIndex = $row.data('original-index');
+    var data = <?!= JSON.stringify(formattedData.slice(1)) ?>;
+    var group1Columns = <?!= JSON.stringify(group1Columns) ?>;
+    var group2Columns = <?!= JSON.stringify(group2Columns) ?>;
+
+    var newRow = $('<tr class="edit-row"></tr>');
+    var cell = $('<td colspan="' + (<?!= displayNames.length ?> + 1) + '"></td>');
+    
+    var editFormHtml = '<div style="padding: 20px; background-color: #f9f9f9; border: 1px solid #ddd;">';
+    editFormHtml += '<h3>Redaguoti eilutę</h3>';
+    editFormHtml += '<table style="width: 100%;"><tr><th style="width: 25%;">Pavadinimas 1</th><th style="width: 25%;">Reikšmė 1</th><th style="width: 25%;">Pavadinimas 2</th><th style="width: 25%;">Reikšmė 2</th></tr>';
+
+    var maxRows = Math.max(group1Columns.length, group2Columns.length);
+    for (var i = 0; i < maxRows; i++) {
+      var name1 = i < group1Columns.length && group1Columns[i] ? group1Columns[i].displayName : "";
+      var value1 = i < group1Columns.length && group1Columns[i] ? (data[originalIndex-1][group1Columns[i].index] || "") : "";
+      var inputField1 = (i < group1Columns.length && group1Columns[i] && group1Columns[i].editable) ? createInputField(group1Columns[i], value1) : ("<div class=\"" + (group1Columns[i] ? group1Columns[i].columnName : '') + "_reiksme\">" + (value1 ? value1.toString() : "") + "</div>");
+
+      var name2 = i < group2Columns.length && group2Columns[i] ? group2Columns[i].displayName : "";
+      var value2 = i < group2Columns.length && group2Columns[i] ? (data[originalIndex-1][group2Columns[i].index] || "") : "";
+      var inputField2 = (i < group2Columns.length && group2Columns[i] && group2Columns[i].editable) ? createInputField(group2Columns[i], value2) : ("<div class=\"" + (group2Columns[i] ? group2Columns[i].columnName : '') + "_reiksme\">" + (value2 ? value2.toString() : "") + "</div>");
+
+      editFormHtml += "<tr><td>" + name1 + "</td><td>" + inputField1 + "</td><td>" + name2 + "</td><td>" + inputField2 + "</td></tr>";
+    }
+    editFormHtml += '</table>';
+    editFormHtml += '<button onclick="saveChanges(' + originalIndex + ')">Išsaugoti</button>';
+    editFormHtml += '<button onclick="$(this).closest(\'.edit-row\').remove()">Atšaukti</button>';
+    editFormHtml += '</div>';
+
+    cell.html(editFormHtml);
+    newRow.append(cell);
+    $row.after(newRow);
+
+    // Inicializuojame datepicker
+    newRow.find(".datepicker").datepicker({ dateFormat: "yy-mm-dd", showButtonPanel: true, changeMonth: true, changeYear: true });
+  }
+
+  function createInputField(column, value) {
+    var inputHtml = "";
+    var id = "input_" + column.columnName;
+    var options = column.pasiulymoOptions || column.formulaOptions || column.options || [];
+    if (options.length > 0) {
+      inputHtml = "<select id='" + id + "' size='" + column.rowCount + "'>" + "<option value='' " + (value === "" ? "selected" : "") + "></option>" + options.map(opt => "<option value='" + opt + "' " + (value.toString() === opt ? "selected" : "") + ">" + opt + "</option>").join("") + "</select>";
+    } else if (column.hasDatePicker) {
+      var displayValue = value && column.isDateTime && value.includes(" ") ? value.split(" ")[0] : value;
+      inputHtml = "<input type='text' id='" + id + "' class='datepicker' value='" + (displayValue || "") + "' placeholder='Įveskite datą'>";
+    } else {
+      inputHtml = "<textarea id='" + id + "' rows='" + column.rowCount + "' placeholder='Įveskite reikšmę'>" + (value ? value.toString() : "") + "</textarea>";
+      if (column.dateButton) {
+        var dateValue = new Date().toLocaleString("lt-LT", {timeZone: "Europe/Vilnius", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit"}).replace(", ", " ").replace(/\./g, "-");
+        inputHtml += "<button class='date-btn' onclick=\"document.getElementById('" + id + "').value = '" + dateValue + "'\">Dabar</button>";
+      }
+    }
+    return "<div class='" + column.columnName + "_reiksme'><div class='input-container'>" + inputHtml + "</div></div>";
   }
 
   window.onclick = function(event) {

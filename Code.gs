@@ -1,8 +1,25 @@
+// OPS
+/*
 const CONFIG = {
   SPREADSHEET_ID: '1KFnjVbU4P0_YlUsKOIOhtIozduQwCSfr4v78J2o3GaM',
   SHEET_NAMES: {
     LEADS: 'leads',
     GENERATED_FILES_FOLDER_ID: '14lLfaWmCu949BO1VcrSlMW1JdS8yCvuA', // <-- ĮRAŠYKITE SAVO ARCHYVO/SUGENERUOTŲ FAILŲ APLANKO ID ČIA
+    CONFIGURATION: 'configuration',
+    PROPOSAL_CONFIG: 'config_pasiulymas',
+    PRICES: 'Kainos',
+    PROPOSAL_CALCULATION: 'pasiulymas',
+    PROPOSAL_TEMPLATE_PREFIX: 'template_pasiulymas',
+    NEW_PROPOSAL_SHEET: 'Pasiūlymas'
+  }
+}; */
+
+// TEST
+const CONFIG = {
+  SPREADSHEET_ID: '1QXWE2WgukqOFWZBwL1aYfS-C9dDzrdzyz9E6iBlV24o',
+  SHEET_NAMES: {
+    LEADS: 'leads',
+    GENERATED_FILES_FOLDER_ID: '1kz8ZFwQ61AemThG72rAPyoTl6dRoDRx7', // <-- ĮRAŠYKITE SAVO ARCHYVO/SUGENERUOTŲ FAILŲ APLANKO ID ČIA
     CONFIGURATION: 'configuration',
     PROPOSAL_CONFIG: 'config_pasiulymas',
     PRICES: 'Kainos',
@@ -472,13 +489,14 @@ function generateProposalDocument(uniqueId) {
         var linksColIndex = headers.map(h => h.toLowerCase()).indexOf(linksColumnName.toLowerCase());
 
         if (linksColIndex !== -1) {
+            var creationDate = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm");
             var linkCell = sheet.getRange(rowIndex + 1, linksColIndex + 1);
             var existingLinks = linkCell.getValue().toString();
             var newLinksValue;
             if (existingLinks) {
-                newLinksValue = existingLinks + '\n' + pdfUrl; // Pridedame naują nuorodą naujoje eilutėje
+                newLinksValue = existingLinks + '\n' + pdfUrl + '|' + creationDate; // Pridedame naują nuorodą ir datą
             } else {
-                newLinksValue = pdfUrl;
+                newLinksValue = pdfUrl + '|' + creationDate;
             }
             linkCell.setValue(newLinksValue);
             Logger.log('Pasiūlymo nuoroda atnaujinta stulpelyje "' + linksColumnName + '" eilutėje ' + (rowIndex + 1));

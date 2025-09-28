@@ -29,6 +29,7 @@ $execUrl = "https://script.google.com/macros/s/$deploymentId/exec"
 
 
 # Atidarome nuorodą Google Chrome naršyklėje
+Write-Host "Atidaroma nuoroda: $execUrl"
 Start-Process chrome $execUrl
 
 
