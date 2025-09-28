@@ -456,3 +456,234 @@ function syncAndGetInitialData(sheetNumber, dataToSync) {
     throw new Error('Nepavyko sinchronizuoti duomenų: ' + e.message);
   }
 }
+
+function generateProposalDocument(uniqueId) {
+    try {
+        var spreadsheet = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
+        var sheet = spreadsheet.getSheetByName(CONFIG.SHEET_NAMES.LEADS);
+        var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+        var allData = sheet.getDataRange().getValues();
+
+        // Find the index of the column to be used as a unique ID (e.g., 'id')
+        var uniqueIdColIndex = headers.map(h => h.toLowerCase()).indexOf('id');
+        if (uniqueIdColIndex === -1) {
+            throw new Error("Could not find the 'id' column, which is used as a unique identifier.");
+        }
+
+        // Find the row corresponding to the unique ID
+        var rowIndex = -1;
+        var data;
+        allData.forEach((row, i) => {
+            if (i > 0 && row[uniqueIdColIndex].toString() === uniqueId) {
+                rowIndex = i; // i is the index in the allData array (starts from 0)
+                data = row;
+            }
+        });
+
+        if (!data) {
+            throw new Error('Could not find row with ID: ' + uniqueId);
+        }
+
+        var rowData = {};
+        headers.forEach((header, i) => {
+            rowData[header] = data[i];
+        });
+
+        // A more reliable way to find the 'pasiulymu_kiekis' value, regardless of case
+        var proposalCountKey = Object.keys(rowData).find(key => key.toLowerCase() === 'pasiulymu_kiekis');
+        var proposalCount = 1; // Default if not found or value is invalid
+        if (proposalCountKey && rowData[proposalCountKey]) {
+            var countValue = parseInt(rowData[proposalCountKey], 10);
+            if (!isNaN(countValue) && countValue > 0) {
+                proposalCount = countValue;
+            }
+        }
+        var templateName = CONFIG.SHEET_NAMES.PROPOSAL_TEMPLATE_PREFIX + proposalCount;
+
+        Logger.log('Generating proposal for row: ' + (rowIndex + 1) + ' using template: ' + templateName);
+        
+        // 1. Create a new Google Sheets file with a name
+        var newSpreadsheet = SpreadsheetApp.create('Ad Energy pasiūlymas ' + (rowData['full_name'] || uniqueId));
+        
+        // Move the generated file to the specified archive folder
+        if (CONFIG.SHEET_NAMES.GENERATED_FILES_FOLDER_ID && CONFIG.SHEET_NAMES.GENERATED_FILES_FOLDER_ID !== 'JUSU_ARCHYVO_APLANKO_ID') {
+            try {
+                var file = DriveApp.getFileById(newSpreadsheet.getId());
+                var targetFolder = DriveApp.getFolderById(CONFIG.SHEET_NAMES.GENERATED_FILES_FOLDER_ID);
+                file.moveTo(targetFolder);
+                Logger.log('Generated proposal file moved to folder: ' + targetFolder.getName());
+            } catch (e) {
+                Logger.log('WARNING: Failed to move the generated file to the specified folder. The file will remain in the main Drive folder. Error: ' + e.toString());
+            }
+        }
+
+        // 2. Find the template sheet in the current spreadsheet
+        var templateSheet = spreadsheet.getSheetByName(templateName);
+        if (!templateSheet) {
+            throw new Error('Could not find the template sheet named "' + templateName + '" in the current spreadsheet.');
+        }
+
+        // 3. Copy the template sheet to the new spreadsheet
+        var newSheet = templateSheet.copyTo(newSpreadsheet);
+        newSheet.setName(CONFIG.SHEET_NAMES.NEW_PROPOSAL_SHEET); // Rename the copied sheet
+
+        // 4. Delete the default "Sheet1" that is created automatically
+        var defaultSheet = newSpreadsheet.getSheetByName('Sheet1');
+        if (defaultSheet) {
+            newSpreadsheet.deleteSheet(defaultSheet);
+        }
+
+        // 5. Replace placeholders in the new sheet
+        for (var key in rowData) {
+            newSheet.createTextFinder('{{' + key + '}}').replaceAllWith(rowData[key] || '');
+        }
+
+        // 6. Call the function to fill in the proposal data
+        sudelioti_pasiulyma(spreadsheet, newSpreadsheet, rowData);
+        
+        // 7. Convert the filled spreadsheet to PDF without gridlines
+        SpreadsheetApp.flush(); // Ensure all changes are saved
+
+        var spreadsheetId = newSpreadsheet.getId();
+        var sheetId = newSheet.getSheetId();
+        var exportUrl = 'https://docs.google.com/spreadsheets/d/' + spreadsheetId + '/export?' +
+                        'exportFormat=pdf&' +
+                        'format=pdf&' +
+                        'gid=' + sheetId + '&' +
+                        'size=a4&' +           // A4 format
+                        'portrait=true&' +     // Portrait orientation
+                        'fitw=true&' +         // Fit to width
+                        'sheetnames=false&' +
+                        'printtitle=false&' +
+                        'gridlines=false';     // Disable gridlines
+
+        var response = UrlFetchApp.fetch(exportUrl, { headers: { 'Authorization': 'Bearer ' + ScriptApp.getOAuthToken() } });
+        var pdfBlob = response.getBlob().setName(newSpreadsheet.getName() + '.pdf');
+        
+        // Save the PDF file in the same specified folder
+        var pdfTargetFolder;
+        if (CONFIG.SHEET_NAMES.GENERATED_FILES_FOLDER_ID && CONFIG.SHEET_NAMES.GENERATED_FILES_FOLDER_ID !== 'JUSU_ARCHYVO_APLANKO_ID') {
+            try {
+                pdfTargetFolder = DriveApp.getFolderById(CONFIG.SHEET_NAMES.GENERATED_FILES_FOLDER_ID);
+            } catch (e) {
+                Logger.log('WARNING: Could not find the specified PDF folder. The PDF will be saved in the main Drive folder. Error: ' + e.toString());
+                pdfTargetFolder = DriveApp.getRootFolder();
+            }
+        } else {
+            pdfTargetFolder = DriveApp.getRootFolder(); // If no ID is specified, save in the root folder
+        }
+        var pdfFile = pdfTargetFolder.createFile(pdfBlob);
+        
+        // 8. Save the PDF link in the 'pasiulymu_nuorodos' column
+        var pdfUrl = pdfFile.getUrl();
+        var linksColumnName = 'pasiulymu_nuorodos';
+        var linksColIndex = headers.map(h => h.toLowerCase()).indexOf(linksColumnName.toLowerCase());
+
+        if (linksColIndex !== -1) {
+            var creationDate = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm");
+            var linkCell = sheet.getRange(rowIndex + 1, linksColIndex + 1);
+            var existingLinks = linkCell.getValue().toString();
+            var newLinksValue;
+            if (existingLinks) {
+                newLinksValue = existingLinks + '\n' + pdfUrl + '|' + creationDate; // Add the new link and date
+            } else {
+                newLinksValue = pdfUrl + '|' + creationDate;
+            }
+            linkCell.setValue(newLinksValue);
+            Logger.log('Proposal link updated in column "' + linksColumnName + '" in row ' + (rowIndex + 1));
+        } else {
+            Logger.log('WARNING: Column "' + linksColumnName + '" not found. The proposal link was not saved.');
+        }
+
+        // 9. Prepare data for the email
+        var recipientEmail = rowData['email'] || ''; // Make sure there is an 'email' column in the 'leads' sheet
+        var subject = 'Jūsų saulės elektrinės pasiūlymas nuo Adenergy';
+        var body = 'Sveiki, ' + (rowData['full_name'] || '') + ',\n\n' +
+                   'Pateikiame Jums paruoštą saulės elektrinės pasiūlymą.\n\n' +
+                   'Pagarbiai,\nAdenergy komanda';
+
+        // 10. Create a Gmail draft
+        var fromAlias = 'info@adenergy.lt';
+        var aliases = GmailApp.getAliases();
+        var options = {
+            attachments: [pdfBlob],
+            htmlBody: body.replace(/\n/g, '<br>') // Convert newlines to <br> for HTML format
+        };
+
+        if (aliases.includes(fromAlias)) {
+            options.from = fromAlias;
+        } else {
+            Logger.log('WARNING: Alias "' + fromAlias + '" not found. The draft will be created using the default sender.');
+        }
+
+        var draft = GmailApp.createDraft(recipientEmail, subject, body, options);
+
+        // 11. Return information to the client
+        return {
+            success: true,
+            draftId: draft.getId(),
+            message: 'Email draft successfully created.'
+        };
+
+    } catch (e) {
+        Logger.log('Error generating document: ' + e.toString());
+        throw new Error('Failed to generate document: ' + e.message);
+    }
+}
+ 
+function sudelioti_pasiulyma(sourceSpreadsheet, targetSpreadsheet, rowData){
+  try {
+    Logger.log("sudelioti_pasiulyma: " + JSON.stringify(rowData));
+    var targetSheet = targetSpreadsheet.getSheetByName(CONFIG.SHEET_NAMES.NEW_PROPOSAL_SHEET);
+    if (!targetSheet) {
+      throw new Error("Proposal sheet '" + CONFIG.SHEET_NAMES.NEW_PROPOSAL_SHEET + "' not found in the new spreadsheet.");
+    }
+
+    for (var i = 1; i <= rowData['pasiulymu_kiekis']; i++) {
+      var calculatorSheetName = CONFIG.SHEET_NAMES.PROPOSAL_CALCULATION_PREFIX + i;
+      var calculatorSheet = sourceSpreadsheet.getSheetByName(calculatorSheetName);
+      if (!calculatorSheet) {
+        Logger.log('WARNING: Calculation sheet "' + calculatorSheetName + '" not found. This proposal will be skipped.');
+        continue;
+      }
+      
+      calculatorSheet.getRange('C7').setValue(rowData["pasirinkite Kw"+i]);      
+      calculatorSheet.getRange('C8').setValue(rowData["saules moduliai"+i]);      
+      calculatorSheet.getRange('C9').setValue(rowData["konstrukcija"+i]);
+
+      Utilities.sleep(1000);
+      SpreadsheetApp.flush();    
+      
+      var sourceRange = calculatorSheet.getRange('G7:G21');
+      var sourceRangeG6= calculatorSheet.getRange('G6');
+      
+      var targetColumn = String.fromCharCode('B'.charCodeAt(0) + i - 1); // B, C, D
+      
+      targetSheet.getRange(targetColumn + '14:' + targetColumn + '28').setValues(sourceRange.getValues());
+      targetSheet.getRange(targetColumn + '13').setValue("Nr." + i + ". " + sourceRangeG6.getValue()); 
+    }
+    
+    var today = new Date();
+    var todayplus2weeks =new Date();
+    todayplus2weeks.setDate(today.getDate() + 14);      
+    var formattedDate_pasiulymodata = Utilities.formatDate(today, Session.getScriptTimeZone(), "yyyy-MM-dd");
+    var formattedDate_galiojaiki = Utilities.formatDate(todayplus2weeks, Session.getScriptTimeZone(), "yyyy-MM-dd");
+    var formattedDate_pasiulymonr = Utilities.formatDate(today, Session.getScriptTimeZone(), "MMdd"); 
+
+    targetSheet.getRange('C2').setValue("Pasiūlymo data: "+formattedDate_pasiulymodata);
+    targetSheet.getRange('C5').setValue("Galioja iki: "+formattedDate_galiojaiki);
+
+    var pasiulymonr=calculatorSheet.getRange('C20').getValue();
+    pasiulymonr = pasiulymonr + 1;
+    calculatorSheet.getRange('C20').setValue(pasiulymonr);
+    var pasiulymo_numeris='Nr.'+formattedDate_pasiulymonr+'-'+pasiulymonr
+    
+    targetSheet.getRange('B9').setValue(pasiulymo_numeris);
+    targetSheet.getRange('A11').setValue("Pasiūlymo gavėjas:\n"+rowData["full_name"]);
+    targetSpreadsheet.setName('Ad Energy pasiūlymas ' + pasiulymo_numeris); 
+    
+  }catch (e) {
+        Logger.log('Error copying data: ' + e.toString());
+        throw new Error('Error copying data: ' + e.message);
+    }
+}
