@@ -64,7 +64,7 @@
       <? 
         var uniqueId = formattedData[i][idIndex] ? formattedData[i][idIndex].toString() : '';
       ?>
-      <td><button class="edit-btn" onclick="showModal(<?= i ?>)">Edit</button><button class="proposal-btn" onclick="showProposalModal(<?= i ?>)">Pasiūlymas</button><button class="generate-proposal-btn" onclick="generateProposal('<?= uniqueId ?>')">Generuoti pasiūlymą</button></td>
+      <td><!-- <button class="edit-btn" onclick="showModal(<?= i ?>)">Edit</button> --><button class="proposal-btn" onclick="showProposalModal(<?= i ?>)">Pasiūlymas</button></td>
       <? columnIndices.forEach(function(idx) { ?>
         <td><?= formattedData[i][idx] ?></td>
       <? }); ?>
@@ -98,7 +98,8 @@
         <table id="pasiulymas3Table"></table>
       </div>
     </div>
-    <button id="saveProposalBtn">Išsaugoti</button>
+    <button id="saveProposalBtn" class="edit-btn">Išsaugoti</button>
+    <button id="generateProposalBtn" class="generate-proposal-btn">Generuoti pasiūlymą</button>
   </div>
 </div>
 
@@ -179,7 +180,7 @@
         var originalIndex = data[i].originalIndex;
         var uniqueId = formattedData[originalIndex][idIndex] ? formattedData[originalIndex][idIndex].toString() : '';
 
-        html += "<tr data-original-index='" + originalIndex + "'><td><button class=\"edit-btn\" onclick=\"showModal(" + originalIndex + ")\">Edit</button><button class=\"proposal-btn\" onclick=\"showProposalModal(" + originalIndex + ")\">Pasiūlymas</button><button class=\"generate-proposal-btn\" onclick=\"generateProposal('" + uniqueId + "')\">Generuoti pasiūlymą</button></td>";
+        html += "<tr data-original-index='" + originalIndex + "'><td><!-- <button class=\"edit-btn\" onclick=\"showModal(" + originalIndex + ")\">Edit</button> --><button class=\"proposal-btn\" onclick=\"showProposalModal(" + originalIndex + ")\">Pasiūlymas</button></td>";
         for (var j = 0; j < indices.length; j++) {
           var value = row[indices[j]] || "";
           html += "<td>" + value + "</td>";
@@ -275,6 +276,7 @@
     var linksListDiv = document.getElementById("pasiulymu_nuorodos_list");
     var modalTitle = modal.querySelector('h2');
     var saveBtn = document.getElementById("saveProposalBtn");
+    var generateBtn = document.getElementById("generateProposalBtn");
     if (!modal || !modalTable1 || !modalTable2 || !pasiulymuKiekisSelect) { console.error("Proposal modal, pasiulymas tables, or pasiulymu_kiekis not found"); return; }
     modalTable1.innerHTML = "";
     modalTable2.innerHTML = "";
@@ -287,6 +289,10 @@
     if (fullName) titleText += ': ' + fullName;
     if (email) titleText += ' (' + email + ')';
     modalTitle.textContent = titleText;
+
+    // Nustatome mygtukų onclick atributus
+    var uniqueId = currentRowData[idIndex] ? currentRowData[idIndex].toString() : '';
+    generateBtn.setAttribute('onclick', "generateProposal('" + uniqueId + "')");
 
     // Atvaizduojame pasiūlymų nuorodas
     if (linksIndex !== -1) {
@@ -533,7 +539,7 @@
     
     var editFormHtml = '<div style="padding: 20px; background-color: #f9f9f9; border: 1px solid #ddd;">';
     editFormHtml += '<h3>Redaguoti eilutę</h3>';
-    editFormHtml += '<table style="width: 100%;"><tr><th style="width: 25%;">Pavadinimas 1</th><th style="width: 25%;">Reikšmė 1</th><th style="width: 25%;">Pavadinimas 2</th><th style="width: 25%;">Reikšmė 2</th></tr>';
+    editFormHtml += '<table style="table-layout: fixed; word-wrap: break-word;"><tr><th style="width: 200px; max-width: 200px;">Pavadinimas 1</th><th style="width: 250px; max-width: 250px;">Reikšmė 1</th><th style="width: 200px; max-width: 200px;">Pavadinimas 2</th><th style="width: 250px; max-width: 250px;">Reikšmė 2</th></tr>';
 
     var maxRows = Math.max(group1Columns.length, group2Columns.length);
     for (var i = 0; i < maxRows; i++) {
