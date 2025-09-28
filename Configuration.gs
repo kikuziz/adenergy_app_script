@@ -6,15 +6,16 @@
 function loadConfiguration(spreadsheet) {
   const sheet2 = spreadsheet.getSheetByName(CONFIG.SHEET_NAMES.CONFIGURATION);
   const sheetProposal = spreadsheet.getSheetByName(CONFIG.SHEET_NAMES.PROPOSAL_CONFIG);
+  const sheetProposalAutoDisplay = spreadsheet.getSheetByName(CONFIG.PROPOSAL_AUTO_DISPLAY_CONFIG);
 
-  if (!sheet2 || !sheetProposal) {
-    throw new Error('Trūksta vieno ar daugiau būtinų lapų ("' + CONFIG.SHEET_NAMES.CONFIGURATION + '" arba "' + CONFIG.SHEET_NAMES.PROPOSAL_CONFIG + '").');
+  if (!sheet2 || !sheetProposal || !sheetProposalAutoDisplay) {
+    throw new Error('Trūksta vieno ar daugiau būtinų konfigūracijos lapų ("' + CONFIG.SHEET_NAMES.CONFIGURATION + '", "' + CONFIG.SHEET_NAMES.PROPOSAL_CONFIG + '", arba "' + CONFIG.PROPOSAL_AUTO_DISPLAY_CONFIG + '").');
   }
 
   const sheet2Headers = sheet2.getRange(1, 1, 1, sheet2.getLastColumn()).getValues()[0];
 
   const requiredColumns = [
-    'stulpeliai_rodyti', 'stulpeliai_rodyti_map', 'issokusi_redaguoti',
+    'stulpeliai_rodyti', 'stulpeliai_rodyti_map', 'redaguoti',
     'issokusi_data_mygtukas', 'issokusi_laukelio_eilutes', 'stulpeliai_YYYY-MM-DD HH:MM',
     'Stulpeliai', 'pasiulymo_reiksmes', 'formule'
   ];
@@ -27,7 +28,7 @@ function loadConfiguration(spreadsheet) {
 
   const columnToShowIndex = sheet2Headers.indexOf('stulpeliai_rodyti');
   const columnMapIndex = sheet2Headers.indexOf('stulpeliai_rodyti_map');
-  const columnEditableIndex = sheet2Headers.indexOf('issokusi_redaguoti');
+  const columnEditableIndex = sheet2Headers.indexOf('redaguoti');
   const columnOptionsIndex = sheet2Headers.indexOf('issokusi_reiksmes');
   const columnDateButtonIndex = sheet2Headers.indexOf('issokusi_data_mygtukas');
   const columnRowsIndex = sheet2Headers.indexOf('issokusi_laukelio_eilutes');
@@ -54,22 +55,40 @@ function loadConfiguration(spreadsheet) {
 
   // Proposal config
   const sheetProposalHeaders = sheetProposal.getRange(1, 1, 1, sheetProposal.getLastColumn()).getValues()[0];
-  const requiredProposalColumns = ['stulpeliai_rodyti', 'issokusi_redaguoti', 'issokusi_pupop'];
+  const requiredProposalColumns = ['pasiulymas_stulpeliai_rodyti', 'redaguoti', 'dropdown_link', 'autoupdate_to_pasiulymas'];
 
   for (const colName of requiredProposalColumns) {
     if (sheetProposalHeaders.indexOf(colName) === -1) {
-      throw new Error(`Klaida: Stulpelis "${colName}" nerastas ${CONFIG.SHEET_NAMES.PROPOSAL_CONFIG} lape.`);
+      Logger.log('DĖMESIO: Stulpelis "' + colName + '" nerastas ' + CONFIG.SHEET_NAMES.PROPOSAL_CONFIG + ' lape, bet tęsiama toliau.');
     }
   }
 
-  const proposalColumnToShowIndex = sheetProposalHeaders.indexOf('stulpeliai_rodyti');
-  const proposalColumnEditableIndex = sheetProposalHeaders.indexOf('issokusi_redaguoti');
-  const proposalColumnPopupIndex = sheetProposalHeaders.indexOf('issokusi_pupop');
+  const proposalColumnToShowIndex = sheetProposalHeaders.indexOf('pasiulymas_stulpeliai_rodyti');
+  const proposalColumnEditableIndex = sheetProposalHeaders.indexOf('redaguoti');
+  const proposalColumnDropdownLinkIndex = sheetProposalHeaders.indexOf('dropdown_link');
+  const proposalColumnAutoUpdateIndex = sheetProposalHeaders.indexOf('autoupdate_to_pasiulymas');
 
   const maxProposalRows = sheetProposal.getLastRow() - 1;
   const proposalSelectedColumns = sheetProposal.getRange(2, proposalColumnToShowIndex + 1, maxProposalRows, 1).getValues().flat().filter(String).map(col => col.trim());
   const proposalEditableColumns = sheetProposal.getRange(2, proposalColumnEditableIndex + 1, maxProposalRows, 1).getValues().flat();
-  const proposalPopupColumns = sheetProposal.getRange(2, proposalColumnPopupIndex + 1, maxProposalRows, 1).getValues().flat();
+  const proposalDropdownLinkColumns = sheetProposal.getRange(2, proposalColumnDropdownLinkIndex + 1, maxProposalRows, 1).getValues().flat();
+  const proposalAutoUpdateColumns = proposalColumnAutoUpdateIndex !== -1 ? sheetProposal.getRange(2, proposalColumnAutoUpdateIndex + 1, maxProposalRows, 1).getValues().flat() : new Array(maxProposalRows).fill('');
+
+  // Load auto-display config
+  const autoDisplayHeaders = sheetProposalAutoDisplay.getRange(1, 1, 1, sheetProposalAutoDisplay.getLastColumn()).getValues()[0];
+  const pavadinimaiIndex = autoDisplayHeaders.indexOf('pasiulymas_pavadinimas');
+  const reiksmeIndex = autoDisplayHeaders.indexOf('pasiulymas_reiksme');
+
+  if (pavadinimaiIndex === -1 || reiksmeIndex === -1) {
+    throw new Error('Trūksta būtinų stulpelių "pasiulymas_pavadinimas" arba "pasiulymas_reiksme" lape ' + CONFIG.PROPOSAL_AUTO_DISPLAY_CONFIG);
+  }
+
+  const autoDisplayData = sheetProposalAutoDisplay.getLastRow() > 1 ? sheetProposalAutoDisplay.getRange(2, 1, sheetProposalAutoDisplay.getLastRow() - 1, sheetProposalAutoDisplay.getLastColumn()).getValues() : [];
+
+  const autoDisplayConfig = autoDisplayData.map(row => ({
+    pavadinimasRef: row[pavadinimaiIndex], // e.g., 'pasiulymas!B10'
+    reiksmeRef: row[reiksmeIndex]      // e.g., 'pasiulymas!C10'
+  })).filter(item => item.pavadinimasRef && item.reiksmeRef);
 
   return {
     selectedColumns,
@@ -87,7 +106,9 @@ function loadConfiguration(spreadsheet) {
     proposal: {
       selectedColumns: proposalSelectedColumns,
       editableColumns: proposalEditableColumns,
-      popupColumns: proposalPopupColumns
-    }
+      dropdownLinkColumns: proposalDropdownLinkColumns,
+      autoUpdateColumns: proposalAutoUpdateColumns,
+      autoDisplay: autoDisplayConfig
+    },
   };
 }

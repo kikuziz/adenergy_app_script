@@ -8,7 +8,7 @@ const CONFIG = {
     CONFIGURATION: 'configuration',
     PROPOSAL_CONFIG: 'config_pasiulymas',
     PRICES: 'Kainos',
-    PROPOSAL_CALCULATION: 'pasiulymas',
+    PROPOSAL_CALCULATION_PREFIX: 'pasiulymas',
     PROPOSAL_TEMPLATE_PREFIX: 'template_pasiulymas',
     NEW_PROPOSAL_SHEET: 'Pasiūlymas'
   }
@@ -23,10 +23,11 @@ const CONFIG = {
     CONFIGURATION: 'configuration',
     PROPOSAL_CONFIG: 'config_pasiulymas',
     PRICES: 'Kainos',
-    PROPOSAL_CALCULATION: 'pasiulymas',
+    PROPOSAL_CALCULATION_PREFIX: 'pasiulymas',
     PROPOSAL_TEMPLATE_PREFIX: 'template_pasiulymas',
     NEW_PROPOSAL_SHEET: 'Pasiūlymas'
-  }
+  },
+  PROPOSAL_AUTO_DISPLAY_CONFIG: 'config_pasiulymas_autoatvaizdavimas'
 };
 
 function doGet() {
@@ -56,7 +57,7 @@ function doGet() {
   if (invalidProposalColumns.length > 0) {
     Logger.log('Invalid columns in config_pasiulymas: ' + invalidProposalColumns.join(', '));
     return HtmlService.createHtmlOutput('<p>Klaida: Netinkami stulpeliai config_pasiulymas lape: ' + invalidProposalColumns.join(', ') + 
-                                        '. Patikrinkite "stulpeliai_rodyti" stulpelį config_pasiulymas lape ir įsitikinkite, kad atitinkami sunumeruoti stulpeliai (pvz., "' + 
+                                        '. Patikrinkite "pasiulymas_stulpeliai_rodyti" stulpelį config_pasiulymas lape ir įsitikinkite, kad atitinkami sunumeruoti stulpeliai (pvz., "' + 
                                         invalidProposalColumns[0] + '1") egzistuoja leads lapo antraštėse.</p>');
   }
   
@@ -123,8 +124,13 @@ function doGet() {
       isDateColumn.push(dateColumns[index] === 'x');
       hasDatePicker.push(datePickerColumns[index] === 'x');
       positions.push(columnPositions[index] || 1);
-      pasiulymoOptions.push(pasiulymoReiksmes[index] ? getCellValueOrFormula(pasiulymoReiksmes[index], 0) : []);
-      formulaOptions.push(formulas[index] ? getCellValueOrFormula(formulas[index], 0) : []);
+      
+      // Nustatome parinktis. `issokusi_reiksmes` turi aukščiausią prioritetą.
+      let opts = cleanedOptions.length > 0 ? cleanedOptions : 
+                 (pasiulymoReiksmes[index] ? getCellValueOrFormula(pasiulymoReiksmes[index], 0) : 
+                 (formulas[index] ? getCellValueOrFormula(formulas[index], 0) : []));
+      pasiulymoOptions.push(opts); // Naudosime šį masyvą visoms parinktims
+
       columnNames.push(colName.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase());
     }
   });
@@ -142,9 +148,9 @@ function doGet() {
   var group2Columns = [];
   columnIndices.forEach(function(idx, i) {
     if (positions[i] === 1) {
-      group1Columns.push({ index: idx, displayName: displayNames[i], editable: isEditable[i], options: columnOptions[i], dateButton: hasDateButton[i], rowCount: rowCountsConfig[i], isDateTime: isDateTimeColumn[i], isDate: isDateColumn[i], hasDatePicker: hasDatePicker[i], pasiulymoOptions: pasiulymoOptions[i], formulaOptions: formulaOptions[i], columnName: columnNames[i] });
+      group1Columns.push({ index: idx, displayName: displayNames[i], editable: isEditable[i], options: pasiulymoOptions[i], dateButton: hasDateButton[i], rowCount: rowCountsConfig[i], isDateTime: isDateTimeColumn[i], isDate: isDateColumn[i], hasDatePicker: hasDatePicker[i], columnName: columnNames[i] });
     } else if (positions[i] === 2) {
-      group2Columns.push({ index: idx, displayName: displayNames[i], editable: isEditable[i], options: columnOptions[i], dateButton: hasDateButton[i], rowCount: rowCountsConfig[i], isDateTime: isDateTimeColumn[i], isDate: isDateColumn[i], hasDatePicker: hasDatePicker[i], pasiulymoOptions: pasiulymoOptions[i], formulaOptions: formulaOptions[i], columnName: columnNames[i] });
+      group2Columns.push({ index: idx, displayName: displayNames[i], editable: isEditable[i], options: pasiulymoOptions[i], dateButton: hasDateButton[i], rowCount: rowCountsConfig[i], isDateTime: isDateTimeColumn[i], isDate: isDateColumn[i], hasDatePicker: hasDatePicker[i], columnName: columnNames[i] });
     }
   });
   
@@ -156,26 +162,34 @@ function doGet() {
   var proposalColumnNames = [];
   var allProposalColumns = [];
 
-  proposal.selectedColumns.forEach(function(colName, index) {
-    var baseColName = colName.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
-    var popupOptions = [];
-    if (proposal.popupColumns[index]) {
-      popupOptions = getCellValueOrFormula(proposal.popupColumns[index], 0);
-    }
+  // Ciklas per visus galimus stulpelius, kad rastume sunumeruotus variantus
+  headers.forEach(function(header, colIndex) {
+    var match = header.match(/^([a-z\s_]+)(\d)$/i); // Pvz., "pasirinkite kw1" -> ["pasirinkite kw1", "pasirinkite kw", "1"]
+    if (!match) return;
 
-    // Find all numbered versions of the column (e.g., "pasirinkite kw1", "pasirinkite kw2", etc.)
-    for (var p = 1; p <= 3; p++) {
-      var numberedColName = colName + p;
-      var colIndex = headers.indexOf(numberedColName.toLowerCase());
-      if (colIndex !== -1) {
-        allProposalColumns.push({
-          index: colIndex,
-          displayName: colName, // Base name for display
-          editable: proposal.editableColumns[index] === 'x',
-          options: popupOptions,
-          columnName: baseColName + p // Unique name, e.g., pasirinkite_kw1
-        });
+    var baseName = match[1].trim(); // "pasirinkite kw"
+    var number = match[2]; // "1"
+    var configIndex = proposal.selectedColumns.findIndex(c => c.toLowerCase() === baseName.toLowerCase());
+
+    if (configIndex !== -1) {
+      var dropdownLinkTemplate = proposal.dropdownLinkColumns[configIndex];
+      var autoUpdateCellTemplate = proposal.autoUpdateColumns[configIndex];
+      var dropdownOptions = [];
+
+      if (dropdownLinkTemplate) {
+        var dynamicRange = dropdownLinkTemplate.replace('pasiulymas!', CONFIG.SHEET_NAMES.PROPOSAL_CALCULATION_PREFIX + number + '!');
+        dropdownOptions = getCellValueOrFormula(dynamicRange, 0);
       }
+
+      allProposalColumns.push({
+        index: colIndex,
+        displayName: baseName,
+        editable: proposal.editableColumns[configIndex] === 'x',
+        options: dropdownOptions,
+        columnName: header.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase(), // pvz., pasirinkite_kw1
+        // Priskiriame auto-update reikšmę, jei ji yra nurodyta konfigūracijoje.
+        autoUpdateCell: autoUpdateCellTemplate || ''
+      });
     }
   });
   
@@ -187,13 +201,14 @@ function doGet() {
   var proposalColumns = proposal.selectedColumns.map((colName, i) => ({
     displayName: colName,
     editable: proposal.editableColumns[i] === 'x',
-    options: getCellValueOrFormula(proposal.popupColumns[i], 0),
+    options: [], // This is not used, options are taken from allProposalColumns
     dateButton: false,
     rowCount: 1,
     isDateTime: false,
     isDate: false,
     hasDatePicker: false,
-    pasiulymoOptions: [],
+    autoUpdateCell: proposal.autoUpdateColumns[i] || '', // Pridedame auto-update konfigūraciją
+    // autoUpdateCell is no longer needed here, it's in allProposalColumns
     formulaOptions: [],
     columnName: colName.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase()
   }));
@@ -306,6 +321,7 @@ function doGet() {
   html.group2Columns = group2Columns;
   html.proposalColumns = proposalColumns;
   html.allProposalColumns = allProposalColumns; // Pass all numbered columns to the view
+  html.autoDisplayConfig = proposal.autoDisplay; // Perduodame auto-atvaizdavimo konfigūraciją
   html.pasiulymuKiekisOptions = pasiulymuKiekisOptions;
   html.pasiulymuKiekisIndex = pasiulymuKiekisIndex;
   html.kainosValues = kainosValues;
@@ -363,279 +379,80 @@ function updateSheet1(rowIndex, updates) {
   }
 }
 
-function generateProposalDocument(uniqueId) {
-    try {
-        var spreadsheet = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
-        var sheet = spreadsheet.getSheetByName(CONFIG.SHEET_NAMES.LEADS);
-        var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-        var allData = sheet.getDataRange().getValues();
-
-        // Surandame stulpelio, kurį naudosime kaip unikalų ID, indeksą (pvz., 'id')
-        var uniqueIdColIndex = headers.map(h => h.toLowerCase()).indexOf('id');
-        if (uniqueIdColIndex === -1) {
-            throw new Error("Nepavyko rasti 'id' stulpelio, kuris naudojamas kaip unikalus identifikatorius.");
-        }
-
-        // Surandame eilutę, atitinkančią unikalų ID
-        var rowIndex = -1;
-        var data;
-        allData.forEach((row, i) => {
-            if (i > 0 && row[uniqueIdColIndex].toString() === uniqueId) {
-                rowIndex = i; // i yra indeksas allData masyve (prasideda nuo 0)
-                data = row;
-            }
-        });
-
-        if (!data) {
-            throw new Error('Nepavyko rasti eilutės su ID: ' + uniqueId);
-        }
-
-        var rowData = {};
-        headers.forEach((header, i) => {
-            rowData[header] = data[i];
-        });
-
-        // Patikimesnis būdas rasti 'pasiulymu_kiekis' reikšmę, nepriklausomai nuo raidžių dydžio
-        var proposalCountKey = Object.keys(rowData).find(key => key.toLowerCase() === 'pasiulymu_kiekis');
-        var proposalCount = 1; // Numatytasis, jei nerandama arba reikšmė netinkama
-        if (proposalCountKey && rowData[proposalCountKey]) {
-            var countValue = parseInt(rowData[proposalCountKey], 10);
-            if (!isNaN(countValue) && countValue > 0) {
-                proposalCount = countValue;
-            }
-        }
-        var templateName = CONFIG.SHEET_NAMES.PROPOSAL_TEMPLATE_PREFIX + proposalCount;
-
-        Logger.log('Generuojamas pasiūlymas eilutei: ' + (rowIndex + 1) + ' naudojant šabloną: ' + templateName);
-        Logger.log('data: '+data)
-        Logger.log('rowData: ' + JSON.stringify(rowData, null, 2));
-        
-        // 1. Sukuriame naują Google Sheets failą su pavadinimu
-        var newSpreadsheet = SpreadsheetApp.create('Ad Energy pasiūlymas ' + (rowData['full_name'] || uniqueId));
-        
-        // Perkeliame sugeneruotą failą į nurodytą archyvo aplanką
-        if (CONFIG.SHEET_NAMES.GENERATED_FILES_FOLDER_ID && CONFIG.SHEET_NAMES.GENERATED_FILES_FOLDER_ID !== 'JUSU_ARCHYVO_APLANKO_ID') {
-            try {
-                var file = DriveApp.getFileById(newSpreadsheet.getId());
-                var targetFolder = DriveApp.getFolderById(CONFIG.SHEET_NAMES.GENERATED_FILES_FOLDER_ID);
-                file.moveTo(targetFolder);
-                Logger.log('Sugeneruotas pasiūlymo failas perkeltas į aplanką: ' + targetFolder.getName());
-            } catch (e) {
-                Logger.log('DĖMESIO: Nepavyko perkelti sugeneruoto failo į nurodytą aplanką. Failas liks pagrindiniame Drive aplanke. Klaida: ' + e.toString());
-            }
-        }
-
-        // 2. Surandame šablono lapą (Sheet) dabartinėje lentelėje
-        var templateSheet = spreadsheet.getSheetByName(templateName);
-        if (!templateSheet) {
-            throw new Error('Nepavyko rasti šablono lapo (Sheet) pavadinimu "' + templateName + '" dabartinėje lentelėje.');
-        }
-
-        // 3. Nukopijuojame šablono lapą į naują lentelę
-        var newSheet = templateSheet.copyTo(newSpreadsheet);
-        newSheet.setName(CONFIG.SHEET_NAMES.NEW_PROPOSAL_SHEET); // Pervadiname nukopijuotą lapą
-
-        // 4. Ištriname numatytąjį "Sheet1" lapą, kuris sukuriamas automatiškai
-        var defaultSheet = newSpreadsheet.getSheetByName('Sheet1');
-        if (defaultSheet) {
-            newSpreadsheet.deleteSheet(defaultSheet);
-        }
-
-        // 5. Pakeičiame žymeklius naujame lape
-        for (var key in rowData) {
-            newSheet.createTextFinder('{{' + key + '}}').replaceAllWith(rowData[key] || '');
-        }
-
-        // 6. Iškviečiame funkciją, kuri užpildo pasiūlymo duomenis
-        sudelioti_pasiulyma(spreadsheet, newSpreadsheet, rowData);
-        
-        //return { url: newSpreadsheet.getUrl() };
-        // 7. Konvertuojame užpildytą lentelę į PDF be tinklelio
-        SpreadsheetApp.flush(); // Užtikriname, kad visi pakeitimai būtų įrašyti
-
-        var spreadsheetId = newSpreadsheet.getId();
-        var sheetId = newSheet.getSheetId();
-        var exportUrl = 'https://docs.google.com/spreadsheets/d/' + spreadsheetId + '/export?' +
-                        'exportFormat=pdf&' +
-                        'format=pdf&' +
-                        'gid=' + sheetId + '&' +
-                        'size=a4&' +           // A4 formatas
-                        'portrait=true&' +     // Vertikali orientacija
-                        'fitw=true&' +         // Talpinti pagal plotį
-                        'sheetnames=false&' +
-                        'printtitle=false&' +
-                        'gridlines=false';     // Išjungiame tinklelį
-
-        var response = UrlFetchApp.fetch(exportUrl, { headers: { 'Authorization': 'Bearer ' + ScriptApp.getOAuthToken() } });
-        var pdfBlob = response.getBlob().setName(newSpreadsheet.getName() + '.pdf');
-        
-        // Išsaugome PDF failą tame pačiame nurodytame aplanke
-        var pdfTargetFolder;
-        if (CONFIG.SHEET_NAMES.GENERATED_FILES_FOLDER_ID && CONFIG.SHEET_NAMES.GENERATED_FILES_FOLDER_ID !== 'JUSU_ARCHYVO_APLANKO_ID') {
-            try {
-                pdfTargetFolder = DriveApp.getFolderById(CONFIG.SHEET_NAMES.GENERATED_FILES_FOLDER_ID);
-            } catch (e) {
-                Logger.log('DĖMESIO: Nepavyko rasti nurodyto PDF aplanko. PDF bus išsaugotas pagrindiniame Drive aplanke. Klaida: ' + e.toString());
-                pdfTargetFolder = DriveApp.getRootFolder();
-            }
-        } else {
-            pdfTargetFolder = DriveApp.getRootFolder(); // Jei ID nenurodytas, išsaugome pagrindiniame aplanke
-        }
-        var pdfFile = pdfTargetFolder.createFile(pdfBlob);
-        
-        // 8. Išsaugome PDF nuorodą 'pasiulymu_nuorodos' stulpelyje
-        var pdfUrl = pdfFile.getUrl();
-        var linksColumnName = 'pasiulymu_nuorodos';
-        var linksColIndex = headers.map(h => h.toLowerCase()).indexOf(linksColumnName.toLowerCase());
-
-        if (linksColIndex !== -1) {
-            var creationDate = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm");
-            var linkCell = sheet.getRange(rowIndex + 1, linksColIndex + 1);
-            var existingLinks = linkCell.getValue().toString();
-            var newLinksValue;
-            if (existingLinks) {
-                newLinksValue = existingLinks + '\n' + pdfUrl + '|' + creationDate; // Pridedame naują nuorodą ir datą
-            } else {
-                newLinksValue = pdfUrl + '|' + creationDate;
-            }
-            linkCell.setValue(newLinksValue);
-            Logger.log('Pasiūlymo nuoroda atnaujinta stulpelyje "' + linksColumnName + '" eilutėje ' + (rowIndex + 1));
-        } else {
-            Logger.log('DĖMESIO: Stulpelis "' + linksColumnName + '" nerastas. Pasiūlymo nuoroda nebuvo išsaugota.');
-        }
-
-        // 9. Paruošiame duomenis laiškui
-        var recipientEmail = rowData['email'] || ''; // Įsitikinkite, kad 'leads' lape yra stulpelis 'email'
-        var subject = 'Jūsų saulės elektrinės pasiūlymas nuo Adenergy';
-        var body = 'Sveiki, ' + (rowData['full_name'] || '') + ',\n\n' +
-                   'Pateikiame Jums paruoštą saulės elektrinės pasiūlymą.\n\n' +
-                   'Pagarbiai,\nAdenergy komanda';
-
-        // 10. Sukuriame Gmail juodraštį
-        var fromAlias = 'info@adenergy.lt';
-        var aliases = GmailApp.getAliases();
-        var options = {
-            attachments: [pdfBlob],
-            htmlBody: body.replace(/\n/g, '<br>') // Konvertuojame naujas eilutes į <br> HTML formatui
-        };
-
-        if (aliases.includes(fromAlias)) {
-            options.from = fromAlias;
-        } else {
-            Logger.log('DĖMESIO: Pseudonimas (alias) "' + fromAlias + '" nerastas. Juodraštis bus sukurtas naudojant numatytąjį siuntėją.');
-        }
-
-        var draft = GmailApp.createDraft(recipientEmail, subject, body, options);
-
-        // 11. Grąžiname informaciją klientui
-        return {
-            success: true,
-            draftId: draft.getId(),
-            message: 'Laiško juodraštis sėkmingai sukurtas.'
-        };
-
-    } catch (e) {
-        Logger.log('Klaida generuojant dokumentą: ' + e.toString());
-        throw new Error('Nepavyko sugeneruoti dokumento: ' + e.message);
-    }
-
-}
- 
-function sudelioti_pasiulyma(sourceSpreadsheet, targetSpreadsheet, rowData){
+/**
+ * Updates a specific cell in one of the proposal calculation sheets.
+ * This function is called from the client-side when an input with auto-update configured is changed.
+ *
+ * @param {number} sheetNumber The number of the proposal (1, 2, or 3).
+ * @param {string} cellAddress The A1 notation of the cell to update (e.g., 'C7').
+ * @param {any} value The new value to set in the cell.
+ */
+function updateProposalSheetCell(sheetNumber, cellAddress, value) {
   try {
-    Logger.log("sudelioti_pasiulyma: " + JSON.stringify(rowData));
-    var calculatorSheet = sourceSpreadsheet.getSheetByName(CONFIG.SHEET_NAMES.PROPOSAL_CALCULATION);
-    if (!calculatorSheet) {
-      throw new Error("Nerastas skaičiavimo lapas '" + CONFIG.SHEET_NAMES.PROPOSAL_CALCULATION + "'.");
-    }
-
-    var targetSheet = targetSpreadsheet.getSheetByName(CONFIG.SHEET_NAMES.NEW_PROPOSAL_SHEET);
-    if (!targetSheet) {
-      throw new Error("Nerastas pasiūlymo lapas '" + CONFIG.SHEET_NAMES.NEW_PROPOSAL_SHEET + "' naujoje lentelėje.");
-    }
-
-    for (var i = 1; i <= rowData['pasiulymu_kiekis']; i++) {
-      //kilowatai
-      calculatorSheet.getRange('C7').setValue(rowData["pasirinkite Kw"+i]);      
-      //modulai
-      calculatorSheet.getRange('C8').setValue(rowData["saules moduliai"+i]);      
-      //konstrukcija
-      calculatorSheet.getRange('C9').setValue(rowData["konstrukcija"+i]);
-
-      // Įterpiame pauzę (1000 milisekundžių = 1 sekundė), kad formulės spėtų perskaičiuoti
-      Utilities.sleep(1000);
-      SpreadsheetApp.flush(); // Užtikriname, kad visi pakeitimai būtų pritaikyti    
-      
-      // Nukopijuojame perskaičiuotas reikšmes iš skaičiuoklės į naują pasiūlymo failą
-      var sourceRange = calculatorSheet.getRange('G7:G21');
-      var sourceRangeG6= calculatorSheet.getRange('G6');
-      Logger.log('Kopijuojama iš ' + sourceRange.getA1Notation() + ' lapo ' + calculatorSheet.getName());
-
-      // Nustatome tikslo stulpelį pagal pasiūlymo numerį
-      var targetColumn = String.fromCharCode('B'.charCodeAt(0) + i - 1); // B, C, D
-      
-      // Įrašome duomenis ir antraštę
-      targetSheet.getRange(targetColumn + '14:' + targetColumn + '28').setValues(sourceRange.getValues());
-      targetSheet.getRange(targetColumn + '13').setValue("Nr." + i + ". " + sourceRangeG6.getValue()); 
-    }
-
+    const spreadsheet = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
+    const sheetName = CONFIG.SHEET_NAMES.PROPOSAL_CALCULATION_PREFIX + sheetNumber;
+    const sheet = spreadsheet.getSheetByName(sheetName);
     
-    var today = new Date();
-    var todayplus2weeks =new Date();
-    todayplus2weeks.setDate(today.getDate() + 14);      
-    var formattedDate_pasiulymodata = Utilities.formatDate(today, Session.getScriptTimeZone(), "yyyy-MM-dd");
-    var formattedDate_galiojaiki = Utilities.formatDate(todayplus2weeks, Session.getScriptTimeZone(), "yyyy-MM-dd");
-    var formattedDate_pasiulymonr = Utilities.formatDate(today, Session.getScriptTimeZone(), "MMdd"); 
-
-    //Pasiūlymo data: 2025-09-22 //
-    targetSheet.getRange('C2').setValue("Pasiūlymo data: "+formattedDate_pasiulymodata);
-
-    // Nustatome "Galioja iki" datą (dabartinė data + 2 savaitės)
-    targetSheet.getRange('C5').setValue("Galioja iki: "+formattedDate_galiojaiki);
-
-    //Nr. 0922-1019//B9
-    var pasiulymonr=calculatorSheet.getRange('C20').getValue();
-    pasiulymonr = pasiulymonr + 1; // Increment the value
-    calculatorSheet.getRange('C20').setValue(pasiulymonr);
-    var pasiulymo_numeris='Nr.'+formattedDate_pasiulymonr+'-'+pasiulymonr
-    
-    targetSheet.getRange('B9').setValue(pasiulymo_numeris);
-    Logger.log("pasiulymo nr:"+pasiulymo_numeris);
-
-    //P. Deividui Podleckiui //A11
-    targetSheet.getRange('A11').setValue("Pasiūlymo gavėjas:\n"+rowData["full_name"]);
-    
-    // failo vardas
-    targetSpreadsheet.setName('Ad Energy pasiūlymas ' + pasiulymo_numeris); 
-    
-
-    
-  }catch (e) {
-        Logger.log('Klaida kopijuojant duomenis: ' + e.toString());
-        throw new Error('Klaida kopijuojant duomenis: ' + e.message);
-    }
-
-
-
-}
-
-function selectFromDropdown(spreadsheetId, sheetName, range, desiredValue) {
-  try {
-    Logger.log('dropdown: '+spreadsheetId+' '+sheetName+' '+range+' '+desiredValue);
-    var spreadsheet = SpreadsheetApp.openById(spreadsheetId);
-    var sheet = spreadsheet.getSheetByName(sheetName);
-
     if (!sheet) {
-      throw new Error('Lapas "' + sheetName + '" nerastas lentelėje su ID ' + spreadsheetId);
+      throw new Error('Skaičiavimo lapas "' + sheetName + '" nerastas.');
     }
 
-    var cell = sheet.getRange(range);
-    cell.setValue(desiredValue); // Ši eilutė nustato reikšmę, bet nepakeičia išskleidžiamojo sąrašo pasirinkimo
+    sheet.getRange(cellAddress).setValue(value);
+    SpreadsheetApp.flush(); // Svarbu: laukiame, kol formulės persiskaičiuos
 
-    Logger.log('Sėkmingai nustatyta reikšmė "' + desiredValue + '" langelyje ' + range + ' lape "' + sheetName + '".');
-    return { success: true, message: 'Reikšmė nustatyta.' };
+    // Po atnaujinimo, nuskaitome ir grąžiname auto-atvaizdavimo reikšmes
+    const config = loadConfiguration(spreadsheet);
+    const autoDisplayConfig = config.proposal.autoDisplay;
+
+    if (!autoDisplayConfig || autoDisplayConfig.length === 0) {
+      return { success: true, autoDisplayValues: [] };
+    }
+
+    const newValues = autoDisplayConfig.map(item => {
+      const pavadinimas = sheet.getRange(item.pavadinimasRef.split('!')[1]).getDisplayValue();
+      const reiksme = sheet.getRange(item.reiksmeRef.split('!')[1]).getDisplayValue();
+      return { pavadinimas, reiksme };
+    });
+
+    return { success: true, autoDisplayValues: newValues };
   } catch (e) {
-    Logger.log('Klaida vykdant selectFromDropdown: ' + e.toString());
-    throw new Error('Nepavyko nustatyti reikšmės: ' + e.message);
+    Logger.log('Klaida vykdant updateProposalSheetCell: ' + e.toString());
+    throw new Error('Nepavyko atnaujinti langelio: ' + e.message);
+  }
+}
+
+function syncAndGetInitialData(sheetNumber, dataToSync) {
+  try {
+    const spreadsheet = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
+    const sheetName = CONFIG.SHEET_NAMES.PROPOSAL_CALCULATION_PREFIX + sheetNumber;
+    const sheet = spreadsheet.getSheetByName(sheetName);
+    if (!sheet) {
+      throw new Error('Skaičiavimo lapas "' + sheetName + '" nerastas.');
+    }
+
+    // 1. Atnaujiname langelius su pateiktais duomenimis
+    for (const item of dataToSync) {
+      sheet.getRange(item.cellAddress).setValue(item.value);
+    }
+
+    SpreadsheetApp.flush(); // Svarbu: laukiame, kol formulės persiskaičiuos
+
+    // 2. Nuskaitome ir grąžiname auto-atvaizdavimo reikšmes
+    const config = loadConfiguration(spreadsheet);
+    const autoDisplayConfig = config.proposal.autoDisplay;
+    if (!autoDisplayConfig || autoDisplayConfig.length === 0) {
+      return { success: true, autoDisplayValues: [] };
+    }
+
+    const newValues = autoDisplayConfig.map(item => {
+      const pavadinimas = sheet.getRange(item.pavadinimasRef.split('!')[1]).getDisplayValue();
+      const reiksme = sheet.getRange(item.reiksmeRef.split('!')[1]).getDisplayValue();
+      return { pavadinimas, reiksme };
+    });
+
+    return { success: true, autoDisplayValues: newValues };
+  } catch (e) {
+    Logger.log('Klaida vykdant syncAndGetInitialData: ' + e.toString());
+    throw new Error('Nepavyko sinchronizuoti duomenų: ' + e.message);
   }
 }

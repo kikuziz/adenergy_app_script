@@ -112,6 +112,7 @@
   var emailIndex = <?!= emailIndex ?>;
   var linksIndex = <?!= linksIndex ?>;
   var formattedData = <?!= JSON.stringify(formattedData) ?>;
+  var autoDisplayConfig = <?!= JSON.stringify(autoDisplayConfig) ?>;
   
   $(document).ready(function() {
     console.log("jQuery and jQuery UI loaded");
@@ -123,24 +124,6 @@
     });
     $("#filterColumn").on("change", function() {
       applyFilter();
-    });
-    $(document).on("change", "#input_pasirinkite_kw_1", function() {
-      updateDependentFields(1);
-    });
-    $(document).on("change", "#input_konstrukcija_1", function() {
-      updateDependentFields(1);
-    });
-    $(document).on("change", "#input_pasirinkite_kw_2", function() {
-      updateDependentFields(2);
-    });
-    $(document).on("change", "#input_konstrukcija_2", function() {
-      updateDependentFields(2);
-    });
-    $(document).on("change", "#input_pasirinkite_kw_3", function() {
-      updateDependentFields(3);
-    });
-    $(document).on("change", "#input_konstrukcija_3", function() {
-      updateDependentFields(3);
     });
 
     // Pridedame paspaudimo ant eilutės funkcionalumą
@@ -192,36 +175,9 @@
   }
 
   function updateDependentFields(tableIndex) {
-    var kwInput = document.getElementById("input_pasirinkite_kw_" + tableIndex);
-    var konstrukcijaInput = document.getElementById("input_konstrukcija_" + tableIndex);
-    if (!kwInput || !konstrukcijaInput) {
-      console.log("Input input_pasirinkite_kw_" + tableIndex + " or input_konstrukcija_" + tableIndex + " not found, skipping dependent fields update");
-      return;
-    }
-    var kwValue = parseFloat(kwInput.value) || 0;
-    var konstrukcijaValue = konstrukcijaInput.value;
-    var inverterDiv = document.getElementById("input_itampos_keitiklis_" + tableIndex);
-    var montavimasDiv = document.getElementById("input_montavimas_" + tableIndex);
-    if (!inverterDiv || !montavimasDiv) {
-      console.log("Inverter div (input_itampos_keitiklis_" + tableIndex + ") or montavimas div (input_montavimas_" + tableIndex + ") not found, skipping update");
-      return;
-    }
-    var inverterValue = "";
-    if (!kwInput.value || kwValue === 0) {
-      inverterValue = "";
-    } else if (kwValue < 15 && kwValue > 0) {
-      inverterValue = kainosValues["A21"];
-    } else if (kwValue <= 20) {
-      inverterValue = kainosValues["A24"];
-    } else {
-      inverterValue = "";
-    }
-    var montavimasValue = "";
-    if (konstrukcijaValue) {
-      montavimasValue = konstrukcijaValue === "Tvirtinimo konstrukcija čerpė" ? kainosValues["A42"] : kainosValues["A38"];
-    }
-    inverterDiv.innerHTML = inverterValue || "";
-    montavimasDiv.innerHTML = montavimasValue || "";
+    // Ši funkcija nebenaudojama, nes skaičiavimai perkelti į serverio pusę (Google Sheets formules).
+    // Paliekama tuščia, kad išvengtume klaidų, jei ji vis dar kur nors iškviečiama.
+    console.log("updateDependentFields is deprecated.");
   }
 
   function showModal(index) {
@@ -255,13 +211,13 @@
     console.log("issiokantiTable HTML: " + html);
     modalTable.innerHTML = html;
     $(".datepicker").datepicker({ dateFormat: "yy-mm-dd", showButtonPanel: true, changeMonth: true, changeYear: true });
-    setTimeout(function() { updateDependentFields(1); updateDependentFields(2); }, 300);
     saveBtn.setAttribute('onclick', 'saveChanges(' + rowIndex + ')');
     modal.style.display = "block";
   }
 
   function showProposalModal(index) {
     console.log("showProposalModal called with index: " + index);
+
     var rowIndex = index;
     var data = <?!= JSON.stringify(formattedData.slice(1)) ?>;
     var proposalColumns = <?!= JSON.stringify(proposalColumns) ?>;
@@ -333,33 +289,37 @@
       var inputField2 = "";
       var inputField3 = "";
 
+      // Surandame auto-update konfigūraciją kiekvienam laukeliui atskirai
+      var autoUpdateCellTemplate1 = allProposalColumns.find(c => c.columnName === baseColumnName + '1')?.autoUpdateCell;
+      var autoUpdateCellTemplate2 = allProposalColumns.find(c => c.columnName === baseColumnName + '2')?.autoUpdateCell;
+      var autoUpdateCellTemplate3 = allProposalColumns.find(c => c.columnName === baseColumnName + '3')?.autoUpdateCell;
+
+      // Dinamiškai sukuriame onchange atributą, jei reikia
+      var onChangeAttr1 = (autoUpdateCellTemplate1 && autoUpdateCellTemplate1.includes('!')) ? `updateProposalSheetCell(1, '${autoUpdateCellTemplate1.split('!')[1]}', this.value);` : '';
+      var onChangeAttr2 = (autoUpdateCellTemplate2 && autoUpdateCellTemplate2.includes('!')) ? `updateProposalSheetCell(2, '${autoUpdateCellTemplate2.split('!')[1]}', this.value);` : '';
+      var onChangeAttr3 = (autoUpdateCellTemplate3 && autoUpdateCellTemplate3.includes('!')) ? `updateProposalSheetCell(3, '${autoUpdateCellTemplate3.split('!')[1]}', this.value);` : '';
+
       if (proposalColumns[i].editable) {
         console.log("Processing proposalColumns[" + i + "]: " + baseColumnName);
-        if (proposalColumns[i].options.length > 0) {
-          inputField1 = "<div class=\"" + baseColumnName + "_reiksme\"><div class=\"input-container\"><select id=\"input_" + baseColumnName + "_1\" size=\"1\">" + 
-            "<option value=\"\"" + (value1 === "" ? " selected" : "") + "></option>" + proposalColumns[i].options.map(opt => "<option value=\"" + opt + "\"" + (value1.toString() === opt ? " selected" : "") + ">" + opt + "</option>").join("") + "</select></div></div>";
-          inputField2 = "<div class=\"" + baseColumnName + "_reiksme\"><div class=\"input-container\"><select id=\"input_" + baseColumnName + "_2\" size=\"1\">" + 
-            "<option value=\"\"" + (value2 === "" ? " selected" : "") + "></option>" + proposalColumns[i].options.map(opt => "<option value=\"" + opt + "\"" + (value2.toString() === opt ? " selected" : "") + ">" + opt + "</option>").join("") + "</select></div></div>";
-          inputField3 = "<div class=\"" + baseColumnName + "_reiksme\"><div class=\"input-container\"><select id=\"input_" + baseColumnName + "_3\" size=\"1\">" + 
-            "<option value=\"\"" + (value3 === "" ? " selected" : "") + "></option>" + proposalColumns[i].options.map(opt => "<option value=\"" + opt + "\"" + (value3.toString() === opt ? " selected" : "") + ">" + opt + "</option>").join("") + "</select></div></div>";
+        // Surandame teisingas parinktis iš allProposalColumns
+        var options1 = allProposalColumns.find(c => c.columnName === baseColumnName + '1')?.options || [];
+        var options2 = allProposalColumns.find(c => c.columnName === baseColumnName + '2')?.options || [];
+        var options3 = allProposalColumns.find(c => c.columnName === baseColumnName + '3')?.options || [];
+        if (options1.length > 0) {
+          inputField1 = "<div class=\"" + baseColumnName + "_reiksme\"><div class=\"input-container\"><select id=\"input_" + baseColumnName + "_1\" size=\"1\" onchange=\"" + onChangeAttr1 + "\">" + 
+            "<option value=\"\"" + (value1 === "" ? " selected" : "") + "></option>" + options1.map(opt => "<option value=\"" + opt + "\"" + (value1.toString() === opt ? " selected" : "") + ">" + opt + "</option>").join("") + "</select></div></div>";
+          inputField2 = "<div class=\"" + baseColumnName + "_reiksme\"><div class=\"input-container\"><select id=\"input_" + baseColumnName + "_2\" size=\"1\" onchange=\"" + onChangeAttr2 + "\">" + 
+            "<option value=\"\"" + (value2 === "" ? " selected" : "") + "></option>" + options2.map(opt => "<option value=\"" + opt + "\"" + (value2.toString() === opt ? " selected" : "") + ">" + opt + "</option>").join("") + "</select></div></div>";
+          inputField3 = "<div class=\"" + baseColumnName + "_reiksme\"><div class=\"input-container\"><select id=\"input_" + baseColumnName + "_3\" size=\"1\" onchange=\"" + onChangeAttr3 + "\">" + 
+            "<option value=\"\"" + (value3 === "" ? " selected" : "") + "></option>" + options3.map(opt => "<option value=\"" + opt + "\"" + (value3.toString() === opt ? " selected" : "") + ">" + opt + "</option>").join("") + "</select></div></div>";
         } else {
-          inputField1 = "<div class=\"" + baseColumnName + "_reiksme\"><div class=\"input-container\"><textarea id=\"input_" + baseColumnName + "_1\" rows=\"1\" placeholder=\"Įveskite reikšmę\">" + (value1 ? value1.toString() : "") + "</textarea></div></div>";
-          inputField2 = "<div class=\"" + baseColumnName + "_reiksme\"><div class=\"input-container\"><textarea id=\"input_" + baseColumnName + "_2\" rows=\"1\" placeholder=\"Įveskite reikšmę\">" + (value2 ? value2.toString() : "") + "</textarea></div></div>";
-          inputField3 = "<div class=\"" + baseColumnName + "_reiksme\"><div class=\"input-container\"><textarea id=\"input_" + baseColumnName + "_3\" rows=\"1\" placeholder=\"Įveskite reikšmę\">" + (value3 ? value3.toString() : "") + "</textarea></div></div>";
+          inputField1 = "<div class=\"" + baseColumnName + "_reiksme\"><div class=\"input-container\"><textarea id=\"input_" + baseColumnName + "_1\" rows=\"1\" placeholder=\"Įveskite reikšmę\" onchange=\"" + onChangeAttr1 + "\">" + (value1 ? value1.toString() : "") + "</textarea></div></div>";
+          inputField2 = "<div class=\"" + baseColumnName + "_reiksme\"><div class=\"input-container\"><textarea id=\"input_" + baseColumnName + "_2\" rows=\"1\" placeholder=\"Įveskite reikšmę\" onchange=\"" + onChangeAttr2 + "\">" + (value2 ? value2.toString() : "") + "</textarea></div></div>";
+          inputField3 = "<div class=\"" + baseColumnName + "_reiksme\"><div class=\"input-container\"><textarea id=\"input_" + baseColumnName + "_3\" rows=\"1\" placeholder=\"Įveskite reikšmę\" onchange=\"" + onChangeAttr3 + "\">" + (value3 ? value3.toString() : "") + "</textarea></div></div>";
         }
       } else {
         console.log("Processing proposalColumns[" + i + "] (non-editable): " + proposalColumns[i].columnName);
-        var displayValue = "";
-        if (proposalColumns[i].columnName === "itampos_keitiklis1") {
-          var kwValue = parseFloat(data[rowIndex-1][allProposalColumns.find(c => c.columnName === "pasirinkite_kw1")?.index] || "10");
-          displayValue = kwValue && kwValue > 0 ? (kwValue < 15 ? kainosValues["A21"] : kwValue <= 20 ? kainosValues["A24"] : "") : "";
-        } else if (proposalColumns[i].columnName === "montavimas1") {
-          var konstrukcijaValue = data[rowIndex-1][allProposalColumns.find(c => c.columnName === "konstrukcija1")?.index] || "";
-          displayValue = konstrukcijaValue ? (konstrukcijaValue === "Tvirtinimo konstrukcija čerpė" ? kainosValues["A42"] : kainosValues["A38"]) : "";
-        } else {
-          displayValue = value1;
-        }
-        inputField1 = "<div class=\"" + proposalColumns[i].columnName.replace(/1$/, '') + "_reiksme\" id=\"input_" + proposalColumns[i].columnName.replace(/1$/, '') + "_1\">" + (displayValue ? displayValue.toString() : "") + "</div>";
+        inputField1 = "<div class=\"" + proposalColumns[i].columnName.replace(/1$/, '') + "_reiksme\" id=\"input_" + proposalColumns[i].columnName.replace(/1$/, '') + "_1\">" + (value1 ? value1.toString() : "") + "</div>";
         inputField2 = "<div class=\"" + proposalColumns[i].columnName.replace(/1$/, '') + "_reiksme\" id=\"input_" + proposalColumns[i].columnName.replace(/1$/, '') + "_2\">" + (value2 ? value2.toString() : "") + "</div>";
         inputField3 = "<div class=\"" + proposalColumns[i].columnName.replace(/1$/, '') + "_reiksme\" id=\"input_" + proposalColumns[i].columnName.replace(/1$/, '') + "_3\">" + (value3 ? value3.toString() : "") + "</div>";
       }
@@ -373,6 +333,52 @@
     modalTable1.innerHTML = html1;
     modalTable2.innerHTML = html2;
     modalTable3.innerHTML = html3;
+
+    // --- Nuoseklus duomenų sinchronizavimas ir auto-atvaizdavimo eilučių įkėlimas ---
+    if (autoDisplayConfig && autoDisplayConfig.length > 0) {
+      var syncData = <?!= JSON.stringify(formattedData.slice(1)) ?>;
+      var syncAllProposalColumns = <?!= JSON.stringify(allProposalColumns) ?>;
+
+      // Ciklas per pasiūlymus (1, 2, 3)
+      for (let i = 1; i <= 3; i++) {
+        // 1. Paruošiame duomenis sinchronizavimui šiam konkrečiam pasiūlymui
+        let dataToSync = [];
+        proposalColumns.forEach(function(pCol) {
+          if (pCol.autoUpdateCell && pCol.autoUpdateCell.includes('!')) {
+            var baseColumnName = pCol.columnName;
+            var cellAddress = pCol.autoUpdateCell.split('!')[1];
+            var fullColumnName = baseColumnName + i;
+            var sourceCol = syncAllProposalColumns.find(c => c.columnName === fullColumnName);
+            if (sourceCol) {
+              var value = syncData[index - 1][sourceCol.index] || '';
+              dataToSync.push({ cellAddress: cellAddress, value: value });
+            }
+          }
+        });
+
+        // 2. Iškviečiame serverio funkciją
+        google.script.run
+          .withSuccessHandler(function(response) {
+            if (response && response.success && response.autoDisplayValues) {
+              console.log(`Gautos auto-atvaizdavimo reikšmės pasiūlymui ${i}:`, response.autoDisplayValues);
+              var tableId = "pasiulymas" + i + "Table";
+              var $table = $("#" + tableId);
+              // Išvalome senas eilutes, jei kartais jos liktų
+              $table.find('.auto-display-row').remove(); 
+              response.autoDisplayValues.forEach(function(item, itemIndex) {
+                var newRow = "<tr class='auto-display-row' data-item-index='" + itemIndex + "'>" +
+                               "<td>" + item.pavadinimas + "</td>" +
+                               "<td>" + item.reiksme + "</td>" +
+                             "</tr>";
+                $table.append(newRow);
+              });
+            }
+          })
+          .withFailureHandler(function(err) { console.error(`Klaida sinchronizuojant pasiūlymą ${i}: ` + err); })
+          .syncAndGetInitialData(i, dataToSync);
+      }
+    }
+
     var pasiulymuKiekisValue = pasiulymuKiekisIndex !== -1 ? (data[rowIndex-1][pasiulymuKiekisIndex] || "").toString() : "";
     pasiulymuKiekisSelect.innerHTML = "<option value=\"\"" + (pasiulymuKiekisValue === "" ? " selected" : "") + "></option>" + pasiulymuKiekisOptions.map(opt => "<option value=\"" + opt + "\"" + (pasiulymuKiekisValue.toString() === opt ? " selected" : "") + ">" + opt + "</option>").join("");
     
@@ -387,14 +393,31 @@
     
     toggleProposalTables();
 
-    setTimeout(function() { 
-      updateDependentFields(1); 
-      updateDependentFields(2); 
-      updateDependentFields(3);
-    }, 300);
     saveBtn.setAttribute('onclick', 'saveProposalChanges(' + rowIndex + ')');
     modal.style.display = "block";
   }
+
+  function updateProposalSheetCell(sheetNumber, cellAddress, value) {
+    console.log("Auto-updating sheet " + sheetNumber + ", cell " + cellAddress + " with value: " + value);
+    google.script.run
+      .withSuccessHandler(function(response) {
+        if (response && response.success && response.autoDisplayValues) {
+          console.log("Gautos atnaujintos auto-atvaizdavimo reikšmės pasiūlymui " + sheetNumber + ":", response.autoDisplayValues);
+          var tableId = "pasiulymas" + sheetNumber + "Table";
+          var $table = $("#" + tableId);
+
+          // Atnaujiname kiekvieną eilutę su naujomis reikšmėmis
+          response.autoDisplayValues.forEach(function(item, itemIndex) {
+            var $row = $table.find(".auto-display-row[data-item-index='" + itemIndex + "']");
+            $row.find('td').eq(0).text(item.pavadinimas); // Atnaujiname pavadinimą
+            $row.find('td').eq(1).text(item.reiksme);      // Atnaujiname reikšmę
+          });
+        }
+      })
+      .withFailureHandler(function(err) { console.error("Klaida automatiškai atnaujinant skaičiuoklės langelį: " + err.message); })
+      .updateProposalSheetCell(sheetNumber, cellAddress, value);
+  }
+
 
   function closeModal(modalId) {
     console.log("closeModal called for: " + modalId);
@@ -458,20 +481,9 @@
         var targetCol = allProposalColumns.find(c => c.columnName === targetColName);
 
         if (!targetCol) continue;
-        var targetColIndex = targetCol.index;
-
         var input = document.getElementById("input_" + baseColumnName + "_" + p);
-        
-        if (baseColumnName === "itampos_keitiklis") {
-          var kwValue = parseFloat(document.getElementById("input_pasirinkite_kw_" + p)?.value || "0");
-          var value = (!kwValue || kwValue === 0) ? "" : (kwValue < 15 && kwValue > 0 ? kainosValues["A21"] : kwValue <= 20 ? kainosValues["A24"] : "");
-          updates[targetColIndex] = { value: value, isDate: false };
-        } else if (baseColumnName === "montavimas") {
-          var konstrukcijaValue = document.getElementById("input_konstrukcija_" + p)?.value || "";
-          var value = konstrukcijaValue ? (konstrukcijaValue === "Tvirtinimo konstrukcija čerpė" ? kainosValues["A42"] : kainosValues["A38"]) : "";
-          updates[targetColIndex] = { value: value, isDate: false };
-        } else if (col.editable && input) {
-          updates[targetColIndex] = { value: input.value, isDate: false };
+        if (col.editable && input) {
+          updates[targetCol.index] = { value: input.value, isDate: false };
         } 
       }
     }
