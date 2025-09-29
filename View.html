@@ -36,6 +36,15 @@
     #pasiulymai {display: flex; flex-direction: row; gap: 20px;}
     #pasiulymai table {flex: 1;}
     #pasiulymu_kiekis {margin-bottom: 10px; width: 100px;}
+    /* Nustatome maksimalų plotį pasiūlymo lentelių "Reikšmė" stulpeliui */
+    #pasiulymai table th, 
+    #pasiulymai table td,
+    .pasiulymai_inline table th,
+    .pasiulymai_inline table td {
+      width: 250px;
+      max-width: 250px;
+      word-wrap: break-word; /* Užtikrina, kad ilgas tekstas būtų perkeltas */
+    }
   </style>
 </head>
 <body>
@@ -549,7 +558,7 @@
     var newRow = $('<tr class="edit-row"></tr>');
     var cell = $('<td colspan="' + (<?!= displayNames.length ?> + 1) + '"></td>');
     
-    var editFormHtml = '<div style="padding: 20px; background-color: #f9f9f9; border: 1px solid #ddd;">';
+    var editFormHtml = '<div style="padding: 20px; background-color: #f9f9f9; border: 1px solid #ddd;"><div id="eilutes_redagavimas">';
     editFormHtml += '<h3>Redaguoti eilutę</h3>';
     editFormHtml += '<table style="table-layout: fixed; word-wrap: break-word;"><tr><th style="width: 200px; max-width: 200px;">Pavadinimas 1</th><th style="width: 250px; max-width: 250px;">Reikšmė 1</th><th style="width: 200px; max-width: 200px;">Pavadinimas 2</th><th style="width: 250px; max-width: 250px;">Reikšmė 2</th></tr>';
 
@@ -568,11 +577,118 @@
     editFormHtml += '</table>';
     editFormHtml += '<button onclick="saveChanges(' + originalIndex + ')">Išsaugoti</button>';
     editFormHtml += '<button onclick="$(this).closest(\'.edit-row\').remove()">Atšaukti</button>';
-    editFormHtml += '</div>';
+    editFormHtml += '</div>'; // eilutes_redagavimas pabaiga
+
+    // --- Pasiūlymo sekcijos pradžia ---
+    var proposalFormHtml = '<div id="pasiulymo_generavimas" style="border-top: 2px solid #eee; margin-top: 20px; padding-top: 20px;">';
+    var currentRowData = data[originalIndex-1];
+    var pasiulymuKiekisOptions = <?!= JSON.stringify(pasiulymuKiekisOptions) ?>;
+    var pasiulymuKiekisIndex = <?!= pasiulymuKiekisIndex ?>;
+    var proposalColumns = <?!= JSON.stringify(proposalColumns) ?>;
+
+    // Pasiūlymų kiekis
+    var pasiulymuKiekisValue = pasiulymuKiekisIndex !== -1 ? (currentRowData[pasiulymuKiekisIndex] || "").toString() : "";
+    proposalFormHtml += '<div class="pasiulymai_su_pasiulymu_kiekiu_inline">';
+    proposalFormHtml += '<h3>Pasiūlymo duomenys</h3>';
+    proposalFormHtml += '<label for="pasiulymu_kiekis_inline">Pasiūlymų kiekis:</label>';
+    proposalFormHtml += '<select class="pasiulymu_kiekis_select">' + "<option value=\"\"" + (pasiulymuKiekisValue === "" ? " selected" : "") + "></option>" + pasiulymuKiekisOptions.map(function(opt) { return "<option value=\"" + opt + "\"" + (pasiulymuKiekisValue.toString() === opt ? " selected" : "") + ">" + opt + "</option>"; }).join("") + '</select>';
+
+    // Sugeneruotų pasiūlymų nuorodos
+    if (linksIndex !== -1) {
+      var linksValue = currentRowData[linksIndex];
+      proposalFormHtml += '<div class="pasiulymu_nuorodos_container_inline" style="margin-top: 15px; ' + (linksValue ? '' : 'display: none;') + '">';
+      proposalFormHtml += '<strong>Sugeneruotų pasiūlymų nuorodos:</strong>';
+      var linksListHtml = '';
+      if (linksValue) {
+        var linksArray = linksValue.split('\n').filter(function(link) { return link.trim() !== ''; });
+        linksListHtml = linksArray.map(function(linkData, i) {
+          var parts = linkData.split('|');
+          var url = parts[0];
+          var date = parts.length > 1 ? parts[1] : '';
+          var dateHtml = date ? ' <span style="color: #888; font-size: 0.9em;">(' + date + ')</span>' : '';
+          return (i + 1) + '. <a href="' + url + '" target="_blank">' + url + '</a>' + dateHtml;
+        }).join('<br>');
+      }
+      proposalFormHtml += '<div class="pasiulymu_nuorodos_list_inline" style="margin-top: 5px; word-break: break-all;">' + linksListHtml + '</div></div>';
+    }
+
+    // Pasiūlymų lentelės
+    proposalFormHtml += '<div class="pasiulymai_inline" style="display: flex; flex-direction: row; gap: 20px;">';
+    proposalFormHtml += '<table class="pasiulymas1Table"></table>';
+    proposalFormHtml += '<table class="pasiulymas2Table"></table>';
+    proposalFormHtml += '<table class="pasiulymas3Table"></table>';
+    proposalFormHtml += '</div></div>'; // pasiulymai_su_pasiulymu_kiekiu_inline pabaiga
+
+    // Mygtukai
+    var uniqueId = currentRowData[idIndex] ? currentRowData[idIndex].toString() : '';
+    proposalFormHtml += '<button class="edit-btn" onclick="saveProposalChanges(' + originalIndex + ')">Išsaugoti pasiūlymą</button>';
+    proposalFormHtml += '<button class="generate-proposal-btn" onclick="generateProposal(\'' + uniqueId + '\')">Generuoti pasiūlymą</button>';
+
+    proposalFormHtml += '</div>'; // pasiulymo_generavimas pabaiga
+
+    // Sujungiame abi dalis
+    editFormHtml += proposalFormHtml + '</div>'; // pagrindinio div pabaiga
 
     cell.html(editFormHtml);
     newRow.append(cell);
     $row.after(newRow);
+
+    // --- Vykdome JavaScript logiką naujai sukurtai pasiūlymo formai ---
+    var $proposalContainer = newRow.find('#pasiulymo_generavimas');
+    var modalTable1 = $proposalContainer.find(".pasiulymas1Table")[0];
+    var modalTable2 = $proposalContainer.find(".pasiulymas2Table")[0];
+    var modalTable3 = $proposalContainer.find(".pasiulymas3Table")[0];
+    var pasiulymuKiekisSelect = $proposalContainer.find(".pasiulymu_kiekis_select")[0];
+
+    var html1 = "<tr><th>Pavadinimas</th><th>Reikšmė</th></tr>";
+    var html2 = "<tr><th>Pavadinimas</th><th>Reikšmė</th></tr>";
+    var html3 = "<tr><th>Pavadinimas</th><th>Reikšmė</th></tr>";
+    for (var i = 0; i < proposalColumns.length; i++) {
+      var name = proposalColumns[i].displayName || "";
+      var baseColumnName = proposalColumns[i].columnName.replace(/1$/, '');
+      var value1 = data[originalIndex-1][allProposalColumns.find(function(c) { return c.columnName === baseColumnName + '1'; })?.index] || "";
+      var value2 = data[originalIndex-1][allProposalColumns.find(function(c) { return c.columnName === baseColumnName + '2'; })?.index] || "";
+      var value3 = data[originalIndex-1][allProposalColumns.find(function(c) { return c.columnName === baseColumnName + '3'; })?.index] || "";
+      if (baseColumnName === "pasirinkite_kw" && !value1) value1 = "10";
+      var inputField1 = "", inputField2 = "", inputField3 = "";
+      var onChangeAttr1 = allProposalColumns.find(function(c) { return c.columnName === baseColumnName + '1'; })?.autoUpdateCell ? "updateProposalSheetCell(1, '" + allProposalColumns.find(function(c) { return c.columnName === baseColumnName + '1'; }).autoUpdateCell.split('!')[1] + "', this.value);" : '';
+      var onChangeAttr2 = allProposalColumns.find(function(c) { return c.columnName === baseColumnName + '2'; })?.autoUpdateCell ? "updateProposalSheetCell(2, '" + allProposalColumns.find(function(c) { return c.columnName === baseColumnName + '2'; }).autoUpdateCell.split('!')[1] + "', this.value);" : '';
+      var onChangeAttr3 = allProposalColumns.find(function(c) { return c.columnName === baseColumnName + '3'; })?.autoUpdateCell ? "updateProposalSheetCell(3, '" + allProposalColumns.find(function(c) { return c.columnName === baseColumnName + '3'; }).autoUpdateCell.split('!')[1] + "', this.value);" : '';
+      if (proposalColumns[i].editable) {
+        var options1 = allProposalColumns.find(function(c) { return c.columnName === baseColumnName + '1'; })?.options || [];
+        var options2 = allProposalColumns.find(function(c) { return c.columnName === baseColumnName + '2'; })?.options || [];
+        var options3 = allProposalColumns.find(function(c) { return c.columnName === baseColumnName + '3'; })?.options || [];
+        if (options1.length > 0) {
+          inputField1 = "<div class=\"" + baseColumnName + "_reiksme\"><div class=\"input-container\"><select id=\"input_" + baseColumnName + "_1\" size=\"1\" onchange=\"" + onChangeAttr1 + "\">" + "<option value=\"\"" + (value1 === "" ? " selected" : "") + "></option>" + options1.map(function(opt) { return "<option value=\"" + opt + "\"" + (value1.toString() === opt ? " selected" : "") + ">" + opt + "</option>"; }).join("") + "</select></div></div>";
+          inputField2 = "<div class=\"" + baseColumnName + "_reiksme\"><div class=\"input-container\"><select id=\"input_" + baseColumnName + "_2\" size=\"1\" onchange=\"" + onChangeAttr2 + "\">" + "<option value=\"\"" + (value2 === "" ? " selected" : "") + "></option>" + options2.map(function(opt) { return "<option value=\"" + opt + "\"" + (value2.toString() === opt ? " selected" : "") + ">" + opt + "</option>"; }).join("") + "</select></div></div>";
+          inputField3 = "<div class=\"" + baseColumnName + "_reiksme\"><div class=\"input-container\"><select id=\"input_" + baseColumnName + "_3\" size=\"1\" onchange=\"" + onChangeAttr3 + "\">" + "<option value=\"\"" + (value3 === "" ? " selected" : "") + "></option>" + options3.map(function(opt) { return "<option value=\"" + opt + "\"" + (value3.toString() === opt ? " selected" : "") + ">" + opt + "</option>"; }).join("") + "</select></div></div>";
+        } else {
+          inputField1 = "<div class=\"" + baseColumnName + "_reiksme\"><div class=\"input-container\"><textarea id=\"input_" + baseColumnName + "_1\" rows=\"1\" placeholder=\"Įveskite reikšmę\" onchange=\"" + onChangeAttr1 + "\">" + (value1 ? value1.toString() : "") + "</textarea></div></div>";
+          inputField2 = "<div class=\"" + baseColumnName + "_reiksme\"><div class=\"input-container\"><textarea id=\"input_" + baseColumnName + "_2\" rows=\"1\" placeholder=\"Įveskite reikšmę\" onchange=\"" + onChangeAttr2 + "\">" + (value2 ? value2.toString() : "") + "</textarea></div></div>";
+          inputField3 = "<div class=\"" + baseColumnName + "_reiksme\"><div class=\"input-container\"><textarea id=\"input_" + baseColumnName + "_3\" rows=\"1\" placeholder=\"Įveskite reikšmę\" onchange=\"" + onChangeAttr3 + "\">" + (value3 ? value3.toString() : "") + "</textarea></div></div>";
+        }
+      } else {
+        inputField1 = "<div class=\"" + proposalColumns[i].columnName.replace(/1$/, '') + "_reiksme\" id=\"input_" + proposalColumns[i].columnName.replace(/1$/, '') + "_1\">" + (value1 ? value1.toString() : "") + "</div>";
+        inputField2 = "<div class=\"" + proposalColumns[i].columnName.replace(/1$/, '') + "_reiksme\" id=\"input_" + proposalColumns[i].columnName.replace(/1$/, '') + "_2\">" + (value2 ? value2.toString() : "") + "</div>";
+        inputField3 = "<div class=\"" + proposalColumns[i].columnName.replace(/1$/, '') + "_reiksme\" id=\"input_" + proposalColumns[i].columnName.replace(/1$/, '') + "_3\">" + (value3 ? value3.toString() : "") + "</div>";
+      }
+      html1 += "<tr><td>" + name + "1</td><td>" + inputField1 + "</td></tr>";
+      html2 += "<tr><td>" + name + "2</td><td>" + inputField2 + "</td></tr>";
+      html3 += "<tr><td>" + name + "3</td><td>" + inputField3 + "</td></tr>";
+    }
+    modalTable1.innerHTML = html1;
+    modalTable2.innerHTML = html2;
+    modalTable3.innerHTML = html3;
+
+    function toggleInlineProposalTables() {
+      var count = pasiulymuKiekisSelect.value;
+      $proposalContainer.find('.pasiulymas1Table').toggle(count >= 1);
+      $proposalContainer.find('.pasiulymas2Table').toggle(count >= 2);
+      $proposalContainer.find('.pasiulymas3Table').toggle(count >= 3);
+    }
+
+    $(pasiulymuKiekisSelect).off('change').on('change', toggleInlineProposalTables);
+    toggleInlineProposalTables();
 
     // Inicializuojame datepicker
     newRow.find(".datepicker").datepicker({ dateFormat: "yy-mm-dd", showButtonPanel: true, changeMonth: true, changeYear: true });
