@@ -34,15 +34,18 @@
     .filter-container input#filterInput {width: 20em;}
     #pasiulymai_su_pasiulymu_kiekiu {margin-top: 20px;}
     #pasiulymai {display: flex; flex-direction: row; gap: 20px;}
-    #pasiulymai table {flex: 1;}
+    #pasiulymai table, .pasiulymai_inline table {
+      flex: 1;
+      table-layout: fixed; /* Svarbiausias pakeitimas: nurodo naudoti fiksuotą išdėstymą */
+    }
     #pasiulymu_kiekis {margin-bottom: 10px; width: 100px;}
     /* Nustatome maksimalų plotį pasiūlymo lentelių "Reikšmė" stulpeliui */
     #pasiulymai table th, 
     #pasiulymai table td,
     .pasiulymai_inline table th,
     .pasiulymai_inline table td {
-      width: 250px;
-      max-width: 250px;
+      width: 50px;
+      max-width: 50px;
       word-wrap: break-word; /* Užtikrina, kad ilgas tekstas būtų perkeltas */
     }
   </style>
