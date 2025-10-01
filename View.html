@@ -480,7 +480,7 @@
     google.script.run
       .withSuccessHandler(function() { alert("Duomenys išsaugoti!"); closeModal("myModal"); location.reload(); })
       .withFailureHandler(function(err) { alert("Klaida išsaugant: " + err); })
-      .updateSheet1(rowIndex, updates);
+      .updateleadSheet(rowIndex, updates);
   }
 
   function saveProposalChanges(rowIndex) {
@@ -530,7 +530,7 @@
     google.script.run
       .withSuccessHandler(function() { alert("Pasiūlymo duomenys išsaugoti!"); closeModal("proposalModal"); location.reload(); })
       .withFailureHandler(function(err) { alert("Klaida išsaugant pasiūlymą: " + err); })
-      .updateSheet1(rowIndex, updates);
+      .updateleadSheet(rowIndex, updates);
   }
 
   function generateProposal(uniqueId) {

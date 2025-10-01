@@ -345,13 +345,13 @@ function doGet() {
   }
 }
 
-function updateSheet1(rowIndex, updates) {
+function updateleadSheet(rowIndex, updates) {
   var spreadsheet = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
-  var sheet = spreadsheet.getSheetByName(CONFIG.SHEET_NAMES.LEADS);
-  if (!sheet) {
+  var leadSheet = spreadsheet.getSheetByName(CONFIG.SHEET_NAMES.LEADS);
+  if (!leadSheet) {
     throw new Error('Lapas "' + CONFIG.SHEET_NAMES.LEADS + '" nerastas.');
   }
-  var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  var headers = leadSheet.getRange(1, 1, 1, leadSheet.getLastColumn()).getValues()[0];
   
   for (var colIndex in updates) {
     var update = updates[colIndex];
@@ -372,10 +372,10 @@ function updateSheet1(rowIndex, updates) {
           value = Utilities.formatDate(date, 'Europe/Vilnius', "yyyy-MM-dd'T'HH:mm:ssZ").replace(/(\d{2})(\d{2})$/, '$1:$2');
         }
       } catch (e) {
-        Logger.log('Error converting to ISO 8601 in updateSheet1: ' + value + ', Error: ' + e);
+        Logger.log('Error converting to ISO 8601 in updateleadSheet: ' + value + ', Error: ' + e);
       }
     }
-    sheet.getRange(rowIndex + 1, parseInt(colIndex) + 1).setValue(value);
+    leadSheet.getRange(rowIndex + 1, parseInt(colIndex) + 1).setValue(value);
   }
 }
 
@@ -391,13 +391,13 @@ function updateProposalSheetCell(sheetNumber, cellAddress, value) {
   try {
     const spreadsheet = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
     const sheetName = CONFIG.SHEET_NAMES.PROPOSAL_CALCULATION_PREFIX + sheetNumber;
-    const sheet = spreadsheet.getSheetByName(sheetName);
+    const calculationSheet = spreadsheet.getSheetByName(sheetName);
     
-    if (!sheet) {
+    if (!calculationSheet) {
       throw new Error('Skaičiavimo lapas "' + sheetName + '" nerastas.');
     }
 
-    sheet.getRange(cellAddress).setValue(value);
+    calculationSheet.getRange(cellAddress).setValue(value);
     SpreadsheetApp.flush(); // Svarbu: laukiame, kol formulės persiskaičiuos
 
     // Po atnaujinimo, nuskaitome ir grąžiname auto-atvaizdavimo reikšmes
@@ -409,8 +409,8 @@ function updateProposalSheetCell(sheetNumber, cellAddress, value) {
     }
 
     const newValues = autoDisplayConfig.map(item => {
-      const pavadinimas = sheet.getRange(item.pavadinimasRef.split('!')[1]).getDisplayValue();
-      const reiksme = sheet.getRange(item.reiksmeRef.split('!')[1]).getDisplayValue();
+      const pavadinimas = calculationSheet.getRange(item.pavadinimasRef.split('!')[1]).getDisplayValue();
+      const reiksme = calculationSheet.getRange(item.reiksmeRef.split('!')[1]).getDisplayValue();
       return { pavadinimas, reiksme };
     });
 
@@ -421,18 +421,19 @@ function updateProposalSheetCell(sheetNumber, cellAddress, value) {
   }
 }
 
-function syncAndGetInitialData(sheetNumber, dataToSync) {
+function syncAndGetInitialData(calculationSheetNumber, dataToSync) {
+  Logger.log('syncAndGetInitialData called with calculationSheetNumber: ' + calculationSheetNumber+ ' and dataToSync: ' + JSON.stringify(dataToSync));
   try {
     const spreadsheet = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
-    const sheetName = CONFIG.SHEET_NAMES.PROPOSAL_CALCULATION_PREFIX + sheetNumber;
-    const sheet = spreadsheet.getSheetByName(sheetName);
-    if (!sheet) {
+    const sheetName = CONFIG.SHEET_NAMES.PROPOSAL_CALCULATION_PREFIX + calculationSheetNumber;
+    const calculationSheet = spreadsheet.getSheetByName(sheetName);
+    if (!calculationSheet) {
       throw new Error('Skaičiavimo lapas "' + sheetName + '" nerastas.');
     }
 
     // 1. Atnaujiname langelius su pateiktais duomenimis
     for (const item of dataToSync) {
-      sheet.getRange(item.cellAddress).setValue(item.value);
+      calculationSheet.getRange(item.cellAddress).setValue(item.value);
     }
 
     SpreadsheetApp.flush(); // Svarbu: laukiame, kol formulės persiskaičiuos
@@ -445,8 +446,8 @@ function syncAndGetInitialData(sheetNumber, dataToSync) {
     }
 
     const newValues = autoDisplayConfig.map(item => {
-      const pavadinimas = sheet.getRange(item.pavadinimasRef.split('!')[1]).getDisplayValue();
-      const reiksme = sheet.getRange(item.reiksmeRef.split('!')[1]).getDisplayValue();
+      const pavadinimas = calculationSheet.getRange(item.pavadinimasRef.split('!')[1]).getDisplayValue();
+      const reiksme = calculationSheet.getRange(item.reiksmeRef.split('!')[1]).getDisplayValue();
       return { pavadinimas, reiksme };
     });
 
