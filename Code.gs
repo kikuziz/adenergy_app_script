@@ -639,30 +639,9 @@ function sudelioti_pasiulyma(sourceSpreadsheet, targetSpreadsheet, rowData){
       throw new Error("Proposal sheet '" + CONFIG.SHEET_NAMES.NEW_PROPOSAL_SHEET + "' not found in the new spreadsheet.");
     }
 
-    for (var i = 1; i <= rowData['pasiulymu_kiekis']; i++) {
-      var calculatorSheetName = CONFIG.SHEET_NAMES.PROPOSAL_CALCULATION_PREFIX + i;
-      var calculatorSheet = sourceSpreadsheet.getSheetByName(calculatorSheetName);
-      if (!calculatorSheet) {
-        Logger.log('WARNING: Calculation sheet "' + calculatorSheetName + '" not found. This proposal will be skipped.');
-        continue;
-      }
-      
-      calculatorSheet.getRange('C7').setValue(rowData["pasirinkite Kw"+i]);      
-      calculatorSheet.getRange('C8').setValue(rowData["saules moduliai"+i]);      
-      calculatorSheet.getRange('C9').setValue(rowData["konstrukcija"+i]);
+    var calculatorSheetName = CONFIG.SHEET_NAMES.PROPOSAL_CALCULATION_PREFIX + 1;
+    var calculatorSheet = sourceSpreadsheet.getSheetByName(calculatorSheetName);
 
-      Utilities.sleep(1000);
-      SpreadsheetApp.flush();    
-      
-      var sourceRange = calculatorSheet.getRange('G7:G21');
-      var sourceRangeG6= calculatorSheet.getRange('G6');
-      
-      var targetColumn = String.fromCharCode('B'.charCodeAt(0) + i - 1); // B, C, D
-      
-      targetSheet.getRange(targetColumn + '14:' + targetColumn + '28').setValues(sourceRange.getValues());
-      targetSheet.getRange(targetColumn + '13').setValue("Nr." + i + ". " + sourceRangeG6.getValue()); 
-    }
-    
     var today = new Date();
     var todayplus2weeks =new Date();
     todayplus2weeks.setDate(today.getDate() + 14);      
@@ -680,7 +659,74 @@ function sudelioti_pasiulyma(sourceSpreadsheet, targetSpreadsheet, rowData){
     
     targetSheet.getRange('B9').setValue(pasiulymo_numeris);
     targetSheet.getRange('A11').setValue("Pasiūlymo gavėjas:\n"+rowData["full_name"]);
-    targetSpreadsheet.setName('Ad Energy pasiūlymas ' + pasiulymo_numeris); 
+    targetSpreadsheet.setName('Ad Energy pasiūlymas ' + pasiulymo_numeris);
+
+    for (var i = 1; i <= rowData['pasiulymu_kiekis']; i++) {
+      var calculatorSheetName = CONFIG.SHEET_NAMES.PROPOSAL_CALCULATION_PREFIX + i;
+      var calculatorSheet = sourceSpreadsheet.getSheetByName(calculatorSheetName);
+      if (!calculatorSheet) {
+        Logger.log('WARNING: Calculation sheet "' + calculatorSheetName + '" not found. This proposal will be skipped.');
+        continue;
+      }
+      
+      calculatorSheet.getRange('C7').setValue(rowData["pasirinkite Kw"+i]);      
+      calculatorSheet.getRange('C8').setValue(rowData["saules moduliai"+i]);      
+      calculatorSheet.getRange('C9').setValue(rowData["konstrukcija"+i]);
+       calculatorSheet.getRange('J29').setValue(rowData["nuolaida"+i]);
+
+      Utilities.sleep(1000);
+      SpreadsheetApp.flush(); // Svarbu: laukiame, kol formulės persiskaičiuos
+        
+      
+      var sourceRange = calculatorSheet.getRange('G7:G21');
+      var sourceRangeG6= calculatorSheet.getRange('G6');
+      
+      var targetColumn = String.fromCharCode('B'.charCodeAt(0) + i - 1); // B, C, D
+      
+      targetSheet.getRange(targetColumn + '13').setValue("Nr." + i + ". " + sourceRangeG6.getValue());
+      targetSheet.getRange(targetColumn + '14:' + targetColumn + '28').setValues(sourceRange.getValues());
+           
+      
+    }
+    // tikrinam del nuolaidu
+    var anyDiscountExists = false;
+    for (var i = 1; i <= rowData['pasiulymu_kiekis']; i++) {
+      if (rowData["nuolaida"+i] && Number(rowData["nuolaida"+i]) > 0) {
+        anyDiscountExists = true;
+        Logger.log("Rasta bent viena nuolaida, įterpiamos eilutės.");
+        calculatorSheetName = CONFIG.SHEET_NAMES.PROPOSAL_CALCULATION_PREFIX + 1;
+        calculatorSheet = sourceSpreadsheet.getSheetByName(calculatorSheetName);
+        
+        targetSheet.insertRowAfter(26); // Įterpiame eilutę nuolaidos reikšmei
+        targetSheet.insertRowAfter(27); // Įterpiame eilutę nuolaidos pavadinimui
+        targetSheet.getRange('A27').setValue(calculatorSheet.getRange('F29').getValue());
+        targetSheet.getRange('A28').setValue(calculatorSheet.getRange('F30').getValue());
+        Logger.log("iterpti stulpeliu pavadinimai:"+calculatorSheet.getRange('F29').getValue()+" "+calculatorSheet.getRange('F30').getValue());
+        break;
+      }
+    }
+
+    // Jei bent viena nuolaida egzistuoja, įterpiame eilutes ir užpildome duomenis
+    if (anyDiscountExists) {
+      // Ciklas per pasiūlymus, kad užpildytume nuolaidų duomenis
+      for (var i = 1; i <= rowData['pasiulymu_kiekis']; i++) {
+        if (rowData["nuolaida"+i] && Number(rowData["nuolaida"+i]) > 0) {
+          var calculatorSheetName = CONFIG.SHEET_NAMES.PROPOSAL_CALCULATION_PREFIX + i;
+          var calculatorSheet = sourceSpreadsheet.getSheetByName(calculatorSheetName);
+          var targetColumn = String.fromCharCode('B'.charCodeAt(0) + i - 1); // B, C, D
+
+          if (calculatorSheet) {           
+            targetSheet.getRange(targetColumn + '27').setValue(calculatorSheet.getRange('J29').getValue()); // Nustatome vertę atitinkamame stulpelyje
+            targetSheet.getRange(targetColumn + '28').setValue(calculatorSheet.getRange('J30').getValue());
+            Logger.log("Pasiūlymui " + i + " pritaikyta nuolaida " + calculatorSheet.getRange('J29').getValue() + " ir " + calculatorSheet.getRange('J30').getValue() + " stulpelyje " + targetColumn);
+          }
+        }
+      }
+    }
+  
+     
+    
+      
     
   }catch (e) {
         Logger.log('Error copying data: ' + e.toString());

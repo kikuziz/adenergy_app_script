@@ -48,6 +48,9 @@
       max-width: 50px;
       word-wrap: break-word; /* Užtikrina, kad ilgas tekstas būtų perkeltas */
     }
+    .pasiulymu_kiekis_select {
+      width: 100px;
+    }
   </style>
 </head>
 <body>
@@ -415,8 +418,16 @@
       .withSuccessHandler(function(response) {
         if (response && response.success && response.autoDisplayValues) {
           console.log("Gautos atnaujintos auto-atvaizdavimo reikšmės pasiūlymui " + sheetNumber + ":", response.autoDisplayValues);
-          var tableId = "pasiulymas" + sheetNumber + "Table";
-          var $table = $("#" + tableId);
+          
+          // Nustatome teisingą selektorių. Modaliniame lange lentelės turi ID,
+          // o įterptinėje formoje (.edit-row) - klases.
+          var tableSelector = '#proposalModal .pasiulymas' + sheetNumber + 'Table, .edit-row .pasiulymas' + sheetNumber + 'Table';
+          var $table = $(tableSelector);
+
+          if ($table.length === 0) {
+            console.error("Nepavyko rasti lentelės su selektoriumi: " + tableSelector);
+            return;
+          }
 
           // Atnaujiname kiekvieną eilutę su naujomis reikšmėmis
           response.autoDisplayValues.forEach(function(item, itemIndex) {
@@ -583,7 +594,7 @@
     editFormHtml += '</div>'; // eilutes_redagavimas pabaiga
 
     // --- Pasiūlymo sekcijos pradžia ---
-    var proposalFormHtml = '<div id="pasiulymo_generavimas" style="border-top: 2px solid #eee; margin-top: 20px; padding-top: 20px;">';
+    var proposalFormHtml = '<div id="pasiulymo_generavimas" style="border-top: 2px solid #eee; margin-top: 20px; padding-top: 20px; max-width: 1000px;">';
     var currentRowData = data[originalIndex-1];
     var pasiulymuKiekisOptions = <?!= JSON.stringify(pasiulymuKiekisOptions) ?>;
     var pasiulymuKiekisIndex = <?!= pasiulymuKiekisIndex ?>;
@@ -692,6 +703,48 @@
 
     $(pasiulymuKiekisSelect).off('change').on('change', toggleInlineProposalTables);
     toggleInlineProposalTables();
+
+    // --- Nuoseklus duomenų sinchronizavimas ir auto-atvaizdavimo eilučių įkėlimas (INLINE) ---
+    if (autoDisplayConfig && autoDisplayConfig.length > 0) {
+      var syncData = <?!= JSON.stringify(formattedData.slice(1)) ?>;
+      var syncAllProposalColumns = <?!= JSON.stringify(allProposalColumns) ?>;
+
+      // Ciklas per pasiūlymus (1, 2, 3)
+      for (let i = 1; i <= 3; i++) {
+        // 1. Paruošiame duomenis sinchronizavimui šiam konkrečiam pasiūlymui
+        let dataToSync = [];
+        proposalColumns.forEach(function(pCol) {
+          if (pCol.autoUpdateCell && pCol.autoUpdateCell.includes('!')) {
+            var baseColumnName = pCol.columnName;
+            var cellAddress = pCol.autoUpdateCell.split('!')[1];
+            var fullColumnName = baseColumnName + i;
+            var sourceCol = syncAllProposalColumns.find(c => c.columnName === fullColumnName);
+            if (sourceCol) {
+              var value = syncData[originalIndex - 1][sourceCol.index] || '';
+              dataToSync.push({ cellAddress: cellAddress, value: value });
+            }
+          }
+        });
+
+        // 2. Iškviečiame serverio funkciją
+        google.script.run
+          .withSuccessHandler(function(response) {
+            if (response && response.success && response.autoDisplayValues) {
+              var $table = $proposalContainer.find('.pasiulymas' + i + 'Table');
+              $table.find('.auto-display-row').remove(); 
+              response.autoDisplayValues.forEach(function(item, itemIndex) {
+                var newRow = "<tr class='auto-display-row' data-item-index='" + itemIndex + "'>" +
+                               "<td>" + item.pavadinimas + "</td>" +
+                               "<td>" + item.reiksme + "</td>" +
+                             "</tr>";
+                $table.append(newRow);
+              });
+            }
+          })
+          .withFailureHandler(function(err) { console.error(`Klaida sinchronizuojant pasiūlymą ${i} (inline): ` + err); })
+          .syncAndGetInitialData(i, dataToSync);
+      }
+    }
 
     // Inicializuojame datepicker
     newRow.find(".datepicker").datepicker({ dateFormat: "yy-mm-dd", showButtonPanel: true, changeMonth: true, changeYear: true });
