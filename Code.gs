@@ -2,21 +2,26 @@
 /*
 const CONFIG = {
   SPREADSHEET_ID: '1KFnjVbU4P0_YlUsKOIOhtIozduQwCSfr4v78J2o3GaM',
+  TITLE: 'OPS v1.00',
   SHEET_NAMES: {
     LEADS: 'leads',
-    GENERATED_FILES_FOLDER_ID: '14lLfaWmCu949BO1VcrSlMW1JdS8yCvuA', // <-- ĮRAŠYKITE SAVO ARCHYVO/SUGENERUOTŲ FAILŲ APLANKO ID ČIA
+    GENERATED_FILES_FOLDER_ID: '1zLCtWiPzcuX1m6RTt6q4zibSdz6BJjKm', // <-- ĮRAŠYKITE SAVO ARCHYVO/SUGENERUOTŲ FAILŲ APLANKO ID ČIA
     CONFIGURATION: 'configuration',
     PROPOSAL_CONFIG: 'config_pasiulymas',
     PRICES: 'Kainos',
     PROPOSAL_CALCULATION_PREFIX: 'pasiulymas',
     PROPOSAL_TEMPLATE_PREFIX: 'template_pasiulymas',
-    NEW_PROPOSAL_SHEET: 'Pasiūlymas'
+    NEW_PROPOSAL_SHEET: 'Pasiūlymas',
+    PROPOSAL_AUTO_DISPLAY_CONFIG: 'config_pasiulymas_autoatvaizdavimas',
+    EMAIL_CONFIG: 'config_mail'
   }
-}; */
+  
+};  */
 
 // TEST
 const CONFIG = {
   SPREADSHEET_ID: '1QXWE2WgukqOFWZBwL1aYfS-C9dDzrdzyz9E6iBlV24o',
+  TITLE: 'TEST v1.00',
   SHEET_NAMES: {
     LEADS: 'leads',
     GENERATED_FILES_FOLDER_ID: '1kz8ZFwQ61AemThG72rAPyoTl6dRoDRx7', // <-- ĮRAŠYKITE SAVO ARCHYVO/SUGENERUOTŲ FAILŲ APLANKO ID ČIA
@@ -338,7 +343,7 @@ function doGet() {
   var linksIndex = headers.indexOf('pasiulymu_nuorodos');
   html.linksIndex = linksIndex;
 
-  return html.evaluate().setTitle('Facebook Leads Duomenys').setWidth(1000).setHeight(600);
+  return html.evaluate().setTitle(CONFIG.TITLE).setWidth(1000).setHeight(600);
   } catch (e) {
     Logger.log('Klaida vykdant doGet: ' + e.toString());
     return HtmlService.createHtmlOutput('<p>Įvyko kritinė klaida: ' + e.toString() + '</p>');
