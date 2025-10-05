@@ -10,8 +10,11 @@ const CONFIG = {
     PRICES: 'Kainos',
     PROPOSAL_CALCULATION_PREFIX: 'pasiulymas',
     PROPOSAL_TEMPLATE_PREFIX: 'template_pasiulymas',
-    NEW_PROPOSAL_SHEET: 'Pasiūlymas'
+    NEW_PROPOSAL_SHEET: 'Pasiūlymas',
+    PROPOSAL_AUTO_DISPLAY_CONFIG: 'config_pasiulymas_autoatvaizdavimas',
+    EMAIL_CONFIG: 'config_mail'
   }
+  
 }; */
 
 // TEST
@@ -25,9 +28,10 @@ const CONFIG = {
     PRICES: 'Kainos',
     PROPOSAL_CALCULATION_PREFIX: 'pasiulymas',
     PROPOSAL_TEMPLATE_PREFIX: 'template_pasiulymas',
-    NEW_PROPOSAL_SHEET: 'Pasiūlymas'
-  },
-  PROPOSAL_AUTO_DISPLAY_CONFIG: 'config_pasiulymas_autoatvaizdavimas'
+    NEW_PROPOSAL_SHEET: 'Pasiūlymas',
+    PROPOSAL_AUTO_DISPLAY_CONFIG: 'config_pasiulymas_autoatvaizdavimas',
+    EMAIL_CONFIG: 'config_mail'
+  }
 };
 
 function doGet() {
@@ -39,7 +43,7 @@ function doGet() {
     }
 
     var config = loadConfiguration(spreadsheet);
-    var { selectedColumns, mappedNames, editableColumns, optionsColumns, dateButtonColumns, rowCounts, dateTimeColumns, dateColumns, datePickerColumns, columnPositions, pasiulymoReiksmes, formulas, proposal } = config;
+    var { selectedColumns, mappedNames, editableColumns, optionsColumns, dateButtonColumns, rowCounts, dateTimeColumns, dateColumns, datePickerColumns, columnPositions, pasiulymoReiksmes, proposal } = config;
   
   var data = sheet1.getDataRange().getValues();
   var headers = data[0].map(header => header.toString().trim().toLowerCase()); // Trim and normalize headers
@@ -110,6 +114,7 @@ function doGet() {
   var pasiulymoOptions = [];
   var formulaOptions = [];
   var columnNames = [];
+  var originalColumnNames = []; // Pridedame originalių pavadinimų masyvą
   selectedColumns.forEach(function(colName, index) {
     var colIndex = headers.indexOf(colName.toLowerCase());
     if (colIndex !== -1) {
@@ -127,11 +132,11 @@ function doGet() {
       
       // Nustatome parinktis. `issokusi_reiksmes` turi aukščiausią prioritetą.
       let opts = cleanedOptions.length > 0 ? cleanedOptions : 
-                 (pasiulymoReiksmes[index] ? getCellValueOrFormula(pasiulymoReiksmes[index], 0) : 
-                 (formulas[index] ? getCellValueOrFormula(formulas[index], 0) : []));
+                 (pasiulymoReiksmes[index] ? getCellValueOrFormula(pasiulymoReiksmes[index], 0) : []);
       pasiulymoOptions.push(opts); // Naudosime šį masyvą visoms parinktims
 
       columnNames.push(colName.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase());
+      originalColumnNames.push(colName); // Išsaugome originalų pavadinimą
     }
   });
   
@@ -148,9 +153,9 @@ function doGet() {
   var group2Columns = [];
   columnIndices.forEach(function(idx, i) {
     if (positions[i] === 1) {
-      group1Columns.push({ index: idx, displayName: displayNames[i], editable: isEditable[i], options: pasiulymoOptions[i], dateButton: hasDateButton[i], rowCount: rowCountsConfig[i], isDateTime: isDateTimeColumn[i], isDate: isDateColumn[i], hasDatePicker: hasDatePicker[i], columnName: columnNames[i] });
+      group1Columns.push({ index: idx, displayName: displayNames[i], editable: isEditable[i], options: pasiulymoOptions[i], dateButton: hasDateButton[i], rowCount: rowCountsConfig[i], isDateTime: isDateTimeColumn[i], isDate: isDateColumn[i], hasDatePicker: hasDatePicker[i], columnName: columnNames[i], headerName: originalColumnNames[i] });
     } else if (positions[i] === 2) {
-      group2Columns.push({ index: idx, displayName: displayNames[i], editable: isEditable[i], options: pasiulymoOptions[i], dateButton: hasDateButton[i], rowCount: rowCountsConfig[i], isDateTime: isDateTimeColumn[i], isDate: isDateColumn[i], hasDatePicker: hasDatePicker[i], columnName: columnNames[i] });
+      group2Columns.push({ index: idx, displayName: displayNames[i], editable: isEditable[i], options: pasiulymoOptions[i], dateButton: hasDateButton[i], rowCount: rowCountsConfig[i], isDateTime: isDateTimeColumn[i], isDate: isDateColumn[i], hasDatePicker: hasDatePicker[i], columnName: columnNames[i], headerName: originalColumnNames[i] });
     }
   });
   
@@ -346,6 +351,7 @@ function doGet() {
 }
 
 function updateleadSheet(rowIndex, updates) {
+  Logger.log('updateleadSheet called with rowIndex: ' + rowIndex + ', updates: ' + JSON.stringify(updates));
   var spreadsheet = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
   var leadSheet = spreadsheet.getSheetByName(CONFIG.SHEET_NAMES.LEADS);
   if (!leadSheet) {
@@ -353,8 +359,14 @@ function updateleadSheet(rowIndex, updates) {
   }
   var headers = leadSheet.getRange(1, 1, 1, leadSheet.getLastColumn()).getValues()[0];
   
-  for (var colIndex in updates) {
-    var update = updates[colIndex];
+  // Sukuriame antraščių žemėlapį (header name -> index) greitesnei paieškai
+  var headerMap = {};
+  headers.forEach((header, i) => {
+    headerMap[header.toLowerCase()] = i;
+  });
+
+  for (var headerName in updates) {
+    var update = updates[headerName];
     var value = update.value;
     if (update.isDate && value) {
       try {
@@ -375,7 +387,13 @@ function updateleadSheet(rowIndex, updates) {
         Logger.log('Error converting to ISO 8601 in updateleadSheet: ' + value + ', Error: ' + e);
       }
     }
-    leadSheet.getRange(rowIndex + 1, parseInt(colIndex) + 1).setValue(value);
+    
+    var colIndex = headerMap[headerName.toLowerCase()];
+    if (colIndex !== undefined) {
+      leadSheet.getRange(rowIndex + 1, colIndex + 1).setValue(value);
+    } else {
+      Logger.log('WARNING: Column "' + headerName + '" not found in leadSheet. Skipping update.');
+    }
   }
 }
 
@@ -388,6 +406,7 @@ function updateleadSheet(rowIndex, updates) {
  * @param {any} value The new value to set in the cell.
  */
 function updateProposalSheetCell(sheetNumber, cellAddress, value) {
+  Logger.log('updateProposalSheetCell called with sheetNumber: ' + sheetNumber + ', cellAddress: ' + cellAddress + ', value: ' + value);
   try {
     const spreadsheet = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
     const sheetName = CONFIG.SHEET_NAMES.PROPOSAL_CALCULATION_PREFIX + sheetNumber;
@@ -597,11 +616,18 @@ function generateProposalDocument(uniqueId) {
         }
 
         // 9. Prepare data for the email
+        var emailConfigSheet = spreadsheet.getSheetByName(CONFIG.SHEET_NAMES.EMAIL_CONFIG);
+        if (!emailConfigSheet) {
+          throw new Error('Laiško konfigūracijos lapas "' + CONFIG.SHEET_NAMES.EMAIL_CONFIG + '" nerastas.');
+        }
+        // Nuskaitome temą ir turinį iš konfigūracijos lapo (antra eilutė)
+        var subjectTemplate = emailConfigSheet.getRange('A2').getValue();
+        var bodyTemplate = emailConfigSheet.getRange('B2').getValue();
+
         var recipientEmail = rowData['email'] || ''; // Make sure there is an 'email' column in the 'leads' sheet
-        var subject = 'Jūsų saulės elektrinės pasiūlymas nuo Adenergy';
-        var body = 'Sveiki, ' + (rowData['full_name'] || '') + ',\n\n' +
-                   'Pateikiame Jums paruoštą saulės elektrinės pasiūlymą.\n\n' +
-                   'Pagarbiai,\nAdenergy komanda';
+        var subject = subjectTemplate;
+        // Pakeičiame {{full_name}} į kliento vardą
+        var body = bodyTemplate.replace('{{full_name}}', (rowData['full_name'] || ''));
 
         // 10. Create a Gmail draft
         var fromAlias = 'info@adenergy.lt';
@@ -700,7 +726,7 @@ function sudelioti_pasiulyma(sourceSpreadsheet, targetSpreadsheet, rowData){
         
         targetSheet.insertRowAfter(26); // Įterpiame eilutę nuolaidos reikšmei
         targetSheet.insertRowAfter(27); // Įterpiame eilutę nuolaidos pavadinimui
-        targetSheet.getRange('A27').setValue(calculatorSheet.getRange('F29').getValue());
+        targetSheet.getRange('A27').setValue(calculatorSheet.getRange('F29').getValue()).setFontColor("red");
         targetSheet.getRange('A28').setValue(calculatorSheet.getRange('F30').getValue());
         Logger.log("iterpti stulpeliu pavadinimai:"+calculatorSheet.getRange('F29').getValue()+" "+calculatorSheet.getRange('F30').getValue());
         break;
@@ -717,7 +743,7 @@ function sudelioti_pasiulyma(sourceSpreadsheet, targetSpreadsheet, rowData){
           var targetColumn = String.fromCharCode('B'.charCodeAt(0) + i - 1); // B, C, D
 
           if (calculatorSheet) {           
-            targetSheet.getRange(targetColumn + '27').setValue(calculatorSheet.getRange('J29').getValue()); // Nustatome vertę atitinkamame stulpelyje
+            targetSheet.getRange(targetColumn + '27').setValue(calculatorSheet.getRange('J29').getValue()).setFontColor("red");; // Nustatome vertę atitinkamame stulpelyje
             targetSheet.getRange(targetColumn + '28').setValue(calculatorSheet.getRange('J30').getValue());
             Logger.log("Pasiūlymui " + i + " pritaikyta nuolaida " + calculatorSheet.getRange('J29').getValue() + " ir " + calculatorSheet.getRange('J30').getValue() + " stulpelyje " + targetColumn);
           }

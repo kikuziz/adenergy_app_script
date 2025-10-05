@@ -6,10 +6,10 @@
 function loadConfiguration(spreadsheet) {
   const sheet2 = spreadsheet.getSheetByName(CONFIG.SHEET_NAMES.CONFIGURATION);
   const sheetProposal = spreadsheet.getSheetByName(CONFIG.SHEET_NAMES.PROPOSAL_CONFIG);
-  const sheetProposalAutoDisplay = spreadsheet.getSheetByName(CONFIG.PROPOSAL_AUTO_DISPLAY_CONFIG);
+  const sheetProposalAutoDisplay = spreadsheet.getSheetByName(CONFIG.SHEET_NAMES.PROPOSAL_AUTO_DISPLAY_CONFIG);
 
   if (!sheet2 || !sheetProposal || !sheetProposalAutoDisplay) {
-    throw new Error('Trūksta vieno ar daugiau būtinų konfigūracijos lapų ("' + CONFIG.SHEET_NAMES.CONFIGURATION + '", "' + CONFIG.SHEET_NAMES.PROPOSAL_CONFIG + '", arba "' + CONFIG.PROPOSAL_AUTO_DISPLAY_CONFIG + '").');
+    throw new Error('Trūksta vieno ar daugiau būtinų konfigūracijos lapų ("' + CONFIG.SHEET_NAMES.CONFIGURATION + '", "' + CONFIG.SHEET_NAMES.PROPOSAL_CONFIG + '", arba "' + CONFIG.SHEET_NAMES.PROPOSAL_AUTO_DISPLAY_CONFIG + '").');
   }
 
   const sheet2Headers = sheet2.getRange(1, 1, 1, sheet2.getLastColumn()).getValues()[0];
@@ -17,7 +17,7 @@ function loadConfiguration(spreadsheet) {
   const requiredColumns = [
     'stulpeliai_rodyti', 'stulpeliai_rodyti_map', 'redaguoti',
     'issokusi_data_mygtukas', 'issokusi_laukelio_eilutes', 'stulpeliai_YYYY-MM-DD HH:MM',
-    'Stulpeliai', 'pasiulymo_reiksmes', 'formule'
+    'Stulpeliai', 'pasiulymo_reiksmes'
   ];
 
   for (const colName of requiredColumns) {
@@ -37,7 +37,6 @@ function loadConfiguration(spreadsheet) {
   const columnDatePickerIndex = sheet2Headers.indexOf('issokusi_data_pasirnkti_data');
   const columnPositionIndex = sheet2Headers.indexOf('Stulpeliai');
   const columnPasiulymoReiksmesIndex = sheet2Headers.indexOf('pasiulymo_reiksmes');
-  const columnFormulaIndex = sheet2Headers.indexOf('formule');
 
   const maxRows = sheet2.getLastRow() - 1;
   const selectedColumns = sheet2.getRange(2, columnToShowIndex + 1, maxRows, 1).getValues().flat().filter(String).map(col => col.trim());
@@ -49,9 +48,8 @@ function loadConfiguration(spreadsheet) {
   const dateTimeColumns = sheet2.getRange(2, columnDateTimeColumnIndex + 1, maxRows, 1).getValues().flat();
   const dateColumns = columnDateColumnIndex !== -1 ? sheet2.getRange(2, columnDateColumnIndex + 1, maxRows, 1).getValues().flat() : new Array(maxRows).fill('');
   const datePickerColumns = columnDatePickerIndex !== -1 ? sheet2.getRange(2, columnDatePickerIndex + 1, maxRows, 1).getValues().flat() : new Array(maxRows).fill('');
-  const columnPositions = sheet2.getRange(2, columnPositionIndex + 1, maxRows, 1).getValues().flat().map(val => val ? parseInt(val) : 0);
+  const columnPositions = sheet2.getRange(2, columnPositionIndex + 1, maxRows, 1).getValues().flat().map(val => (val !== "" && !isNaN(val)) ? parseInt(val) : 1);
   const pasiulymoReiksmes = sheet2.getRange(2, columnPasiulymoReiksmesIndex + 1, maxRows, 1).getValues().flat();
-  const formulas = sheet2.getRange(2, columnFormulaIndex + 1, maxRows, 1).getValues().flat();
 
   // Proposal config
   const sheetProposalHeaders = sheetProposal.getRange(1, 1, 1, sheetProposal.getLastColumn()).getValues()[0];
@@ -80,7 +78,7 @@ function loadConfiguration(spreadsheet) {
   const reiksmeIndex = autoDisplayHeaders.indexOf('pasiulymas_reiksme');
 
   if (pavadinimaiIndex === -1 || reiksmeIndex === -1) {
-    throw new Error('Trūksta būtinų stulpelių "pasiulymas_pavadinimas" arba "pasiulymas_reiksme" lape ' + CONFIG.PROPOSAL_AUTO_DISPLAY_CONFIG);
+    throw new Error('Trūksta būtinų stulpelių "pasiulymas_pavadinimas" arba "pasiulymas_reiksme" lape ' + CONFIG.SHEET_NAMES.PROPOSAL_AUTO_DISPLAY_CONFIG);
   }
 
   const autoDisplayData = sheetProposalAutoDisplay.getLastRow() > 1 ? sheetProposalAutoDisplay.getRange(2, 1, sheetProposalAutoDisplay.getLastRow() - 1, sheetProposalAutoDisplay.getLastColumn()).getValues() : [];
@@ -102,7 +100,6 @@ function loadConfiguration(spreadsheet) {
     datePickerColumns,
     columnPositions,
     pasiulymoReiksmes,
-    formulas,
     proposal: {
       selectedColumns: proposalSelectedColumns,
       editableColumns: proposalEditableColumns,

@@ -419,9 +419,9 @@
         if (response && response.success && response.autoDisplayValues) {
           console.log("Gautos atnaujintos auto-atvaizdavimo reikšmės pasiūlymui " + sheetNumber + ":", response.autoDisplayValues);
           
-          // Nustatome teisingą selektorių. Modaliniame lange lentelės turi ID,
-          // o įterptinėje formoje (.edit-row) - klases.
-          var tableSelector = '#proposalModal .pasiulymas' + sheetNumber + 'Table, .edit-row .pasiulymas' + sheetNumber + 'Table';
+          // Nustatome teisingą selektorių. Modaliniame lange lentelės turi ID (naudojame #),
+          // o įterptinėje formoje (.edit-row) - klases (naudojame .).
+          var tableSelector = '#proposalModal #pasiulymas' + sheetNumber + 'Table, .edit-row .pasiulymas' + sheetNumber + 'Table';
           var $table = $(tableSelector);
 
           if ($table.length === 0) {
@@ -461,7 +461,7 @@
           if (group1Columns[i].hasDatePicker && value) {
             value = group1Columns[i].isDate ? value : value + " 00:00";
           }
-          updates[group1Columns[i].index] = { value: value, isDate: group1Columns[i].isDateTime || group1Columns[i].isDate };
+          updates[group1Columns[i].headerName] = { value: value, isDate: group1Columns[i].isDateTime || group1Columns[i].isDate };
         }
       }
     }
@@ -473,7 +473,7 @@
           if (group2Columns[i].hasDatePicker && value) {
             value = group2Columns[i].isDate ? value : value + " 00:00";
           }
-          updates[group2Columns[i].index] = { value: value, isDate: group2Columns[i].isDateTime || group2Columns[i].isDate };
+          updates[group2Columns[i].headerName] = { value: value, isDate: group2Columns[i].isDateTime || group2Columns[i].isDate };
         }
       }
     }
@@ -485,13 +485,18 @@
 
   function saveProposalChanges(rowIndex) {
     console.log("saveProposalChanges called for row index: " + rowIndex);
-    var pasiulymuKiekis = parseInt(document.getElementById("pasiulymu_kiekis")?.value || "1");
+    // Nustatome, ar dirbame modaliniame lange ar įterptinėje formoje, ir paimame teisingą reikšmę.
+    var $editRow = $('.edit-row');
+    var pasiulymuKiekisSelect = $editRow.length > 0 
+      ? $editRow.find(".pasiulymu_kiekis_select")[0] 
+      : document.getElementById("pasiulymu_kiekis");
+    var pasiulymuKiekis = parseInt(pasiulymuKiekisSelect?.value || "1");
     var updates = {};
     var proposalColumns = <?!= JSON.stringify(proposalColumns) ?>;
 
     // Atnaujiname 'pasiulymu_kiekis' stulpelį
     if (<?!= pasiulymuKiekisIndex ?> !== -1) {
-      updates[<?!= pasiulymuKiekisIndex ?>] = { value: pasiulymuKiekis.toString(), isDate: false };
+      updates['pasiulymu_kiekis'] = { value: pasiulymuKiekis.toString(), isDate: false };
     }
 
     // Ciklas per visus konfigūruotus pasiūlymo stulpelius
@@ -506,7 +511,7 @@
         if (!targetCol) continue;
         var input = document.getElementById("input_" + baseColumnName + "_" + p);
         if (col.editable && input) {
-          updates[targetCol.index] = { value: input.value, isDate: false };
+          updates[targetCol.displayName + p] = { value: input.value, isDate: false };
         } 
       }
     }
@@ -522,7 +527,7 @@
         var targetCol = allProposalColumns.find(c => c.columnName === targetColName);
 
         if (targetCol) {
-          updates[targetCol.index] = { value: "", isDate: false }; // Nustatome tuščią reikšmę
+          updates[targetCol.displayName + p] = { value: "", isDate: false }; // Nustatome tuščią reikšmę
         }
       }
     }
@@ -637,7 +642,7 @@
     var uniqueId = currentRowData[idIndex] ? currentRowData[idIndex].toString() : '';
     proposalFormHtml += '<button class="edit-btn" onclick="saveProposalChanges(' + originalIndex + ')">Išsaugoti pasiūlymą</button>';
     proposalFormHtml += '<button class="generate-proposal-btn" onclick="generateProposal(\'' + uniqueId + '\')">Generuoti pasiūlymą</button>';
-
+    
     proposalFormHtml += '</div>'; // pasiulymo_generavimas pabaiga
 
     // Sujungiame abi dalis
