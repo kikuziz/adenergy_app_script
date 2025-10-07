@@ -13,7 +13,7 @@ const CONFIG = {
     PROPOSAL_TEMPLATE_PREFIX: 'template_pasiulymas',
     NEW_PROPOSAL_SHEET: 'Pasiūlymas',
     PROPOSAL_AUTO_DISPLAY_CONFIG: 'config_pasiulymas_autoatvaizdavimas',
-    EMAIL_CONFIG: 'config_mail'
+    EMAIL_CONFIG: 'config_mail',
     NEW_PROPOSAL_SHEET: 'Pasiūlymas',
     PROPOSAL_AUTO_DISPLAY_CONFIG: 'config_pasiulymas_autoatvaizdavimas',
     EMAIL_CONFIG: 'config_mail'
@@ -24,7 +24,7 @@ const CONFIG = {
 // TEST
 const CONFIG = {
   SPREADSHEET_ID: '1QXWE2WgukqOFWZBwL1aYfS-C9dDzrdzyz9E6iBlV24o',
-  TITLE: 'TEST v1.00',
+  TITLE: 'TEST v1.01',
   SHEET_NAMES: {
     LEADS: 'leads',
     GENERATED_FILES_FOLDER_ID: '1kz8ZFwQ61AemThG72rAPyoTl6dRoDRx7', // <-- ĮRAŠYKITE SAVO ARCHYVO/SUGENERUOTŲ FAILŲ APLANKO ID ČIA
@@ -754,11 +754,7 @@ function sudelioti_pasiulyma(sourceSpreadsheet, targetSpreadsheet, rowData){
           }
         }
       }
-    }
-  
-     
-    
-      
+    }      
     
   }catch (e) {
         Logger.log('Error copying data: ' + e.toString());
