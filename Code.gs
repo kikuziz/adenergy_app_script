@@ -14,6 +14,9 @@ const CONFIG = {
     NEW_PROPOSAL_SHEET: 'Pasiūlymas',
     PROPOSAL_AUTO_DISPLAY_CONFIG: 'config_pasiulymas_autoatvaizdavimas',
     EMAIL_CONFIG: 'config_mail'
+    NEW_PROPOSAL_SHEET: 'Pasiūlymas',
+    PROPOSAL_AUTO_DISPLAY_CONFIG: 'config_pasiulymas_autoatvaizdavimas',
+    EMAIL_CONFIG: 'config_mail'
   }
 };  */
 
@@ -838,11 +841,7 @@ function sudelioti_pasiulyma(sourceSpreadsheet, targetSpreadsheet, rowData){
           }
         }
       }
-    }
-  
-     
-    
-      
+    }      
     
   }catch (e) {
         Logger.log('Error copying data: ' + e.toString());
