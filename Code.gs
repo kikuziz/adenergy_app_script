@@ -14,9 +14,6 @@ const CONFIG = {
     NEW_PROPOSAL_SHEET: 'Pasiūlymas',
     PROPOSAL_AUTO_DISPLAY_CONFIG: 'config_pasiulymas_autoatvaizdavimas',
     EMAIL_CONFIG: 'config_mail'
-    NEW_PROPOSAL_SHEET: 'Pasiūlymas',
-    PROPOSAL_AUTO_DISPLAY_CONFIG: 'config_pasiulymas_autoatvaizdavimas',
-    EMAIL_CONFIG: 'config_mail'
   }
 };  */
 
