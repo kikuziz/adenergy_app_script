@@ -17,6 +17,26 @@ const CONFIG = {
   }
 };  */
 
+// OPS Airidas v1.01
+/*
+const CONFIG = {
+  SPREADSHEET_ID: '1YjjKCX-qW92CwCZFW_w8bIEt3vxnycJlRUbQ6EmyR3I',
+  TITLE: 'OPS Airidas v1.01',
+  SHEET_NAMES: {
+    LEADS: 'leads',
+    GENERATED_FILES_FOLDER_ID: '1zLCtWi1Qe-5GzUq4UB9mj-muE3RYhn859ef17SsPzcuX1m6RTt6q4zibSdz6BJjKm', // <-- ĮRAŠYKITE SAVO ARCHYVO/SUGENERUOTŲ FAILŲ APLANKO ID ČIA
+    CONFIGURATION: 'configuration',
+    PROPOSAL_CONFIG: 'config_pasiulymas',
+    PRICES: 'Kainos',
+    PROPOSAL_CALCULATION_PREFIX: 'pasiulymas',
+    PROPOSAL_TEMPLATE_PREFIX: 'template_pasiulymas',
+    NEW_PROPOSAL_SHEET: 'Pasiūlymas',
+    PROPOSAL_AUTO_DISPLAY_CONFIG: 'config_pasiulymas_autoatvaizdavimas',
+    EMAIL_CONFIG: 'config_mail'
+  }
+};  
+*/
+
 // TEST
 const CONFIG = {
   SPREADSHEET_ID: '186Q3q4QVgS4QnE_Q9GUpEbOVxsgjfm8k0RMVxchVSlg',
