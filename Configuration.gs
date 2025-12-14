@@ -26,30 +26,27 @@ function loadConfiguration(spreadsheet) {
     }
   }
 
-  const columnToShowIndex = sheet2Headers.indexOf('stulpeliai_rodyti');
-  const columnMapIndex = sheet2Headers.indexOf('stulpeliai_rodyti_map');
-  const columnEditableIndex = sheet2Headers.indexOf('redaguoti');
-  const columnOptionsIndex = sheet2Headers.indexOf('issokusi_reiksmes');
-  const columnDateButtonIndex = sheet2Headers.indexOf('issokusi_data_mygtukas');
-  const columnRowsIndex = sheet2Headers.indexOf('issokusi_laukelio_eilutes');
-  const columnDateTimeColumnIndex = sheet2Headers.indexOf('stulpeliai_YYYY-MM-DD HH:MM');
-  const columnDateColumnIndex = sheet2Headers.indexOf('stulpeliai_YYYY-MM-DD');
-  const columnDatePickerIndex = sheet2Headers.indexOf('issokusi_data_pasirnkti_data');
-  const columnPositionIndex = sheet2Headers.indexOf('Stulpeliai');
-  const columnPasiulymoReiksmesIndex = sheet2Headers.indexOf('pasiulymo_reiksmes');
+  // Read all data from the configuration sheet at once
+  const configData = sheet2.getRange(2, 1, sheet2.getLastRow() - 1, sheet2.getLastColumn()).getValues();
 
-  const maxRows = sheet2.getLastRow() - 1;
-  const selectedColumns = sheet2.getRange(2, columnToShowIndex + 1, maxRows, 1).getValues().flat().filter(String).map(col => col.trim());
-  const mappedNames = sheet2.getRange(2, columnMapIndex + 1, maxRows, 1).getValues().flat();
-  const editableColumns = sheet2.getRange(2, columnEditableIndex + 1, maxRows, 1).getValues().flat();
-  const optionsColumns = columnOptionsIndex !== -1 ? sheet2.getRange(2, columnOptionsIndex + 1, maxRows, 1).getValues().flat() : new Array(maxRows).fill('');
-  const dateButtonColumns = sheet2.getRange(2, columnDateButtonIndex + 1, maxRows, 1).getValues().flat();
-  const rowCounts = columnRowsIndex !== -1 ? sheet2.getRange(2, columnRowsIndex + 1, maxRows, 1).getValues().flat() : new Array(maxRows).fill('');
-  const dateTimeColumns = sheet2.getRange(2, columnDateTimeColumnIndex + 1, maxRows, 1).getValues().flat();
-  const dateColumns = columnDateColumnIndex !== -1 ? sheet2.getRange(2, columnDateColumnIndex + 1, maxRows, 1).getValues().flat() : new Array(maxRows).fill('');
-  const datePickerColumns = columnDatePickerIndex !== -1 ? sheet2.getRange(2, columnDatePickerIndex + 1, maxRows, 1).getValues().flat() : new Array(maxRows).fill('');
-  const columnPositions = sheet2.getRange(2, columnPositionIndex + 1, maxRows, 1).getValues().flat().map(val => (val !== "" && !isNaN(val)) ? parseInt(val) : 1);
-  const pasiulymoReiksmes = sheet2.getRange(2, columnPasiulymoReiksmesIndex + 1, maxRows, 1).getValues().flat();
+  // Helper function to get a column's data from the pre-fetched array
+  const getColumnData = (headerName) => {
+    const index = sheet2Headers.indexOf(headerName);
+    if (index === -1) return new Array(configData.length).fill('');
+    return configData.map(row => row[index]);
+  };
+
+  const selectedColumns = getColumnData('stulpeliai_rodyti').filter(String).map(col => col.toString().trim());
+  const mappedNames = getColumnData('stulpeliai_rodyti_map');
+  const editableColumns = getColumnData('redaguoti');
+  const optionsColumns = getColumnData('issokusi_reiksmes');
+  const dateButtonColumns = getColumnData('issokusi_data_mygtukas');
+  const rowCounts = getColumnData('issokusi_laukelio_eilutes');
+  const dateTimeColumns = getColumnData('stulpeliai_YYYY-MM-DD HH:MM');
+  const dateColumns = getColumnData('stulpeliai_YYYY-MM-DD');
+  const datePickerColumns = getColumnData('issokusi_data_pasirnkti_data');
+  const columnPositions = getColumnData('Stulpeliai').map(val => (val !== "" && !isNaN(val)) ? parseInt(val) : 1);
+  const pasiulymoReiksmes = getColumnData('pasiulymo_reiksmes');
 
   // Proposal config
   const sheetProposalHeaders = sheetProposal.getRange(1, 1, 1, sheetProposal.getLastColumn()).getValues()[0];
@@ -57,20 +54,24 @@ function loadConfiguration(spreadsheet) {
 
   for (const colName of requiredProposalColumns) {
     if (sheetProposalHeaders.indexOf(colName) === -1) {
-      Logger.log('DĖMESIO: Stulpelis "' + colName + '" nerastas ' + CONFIG.SHEET_NAMES.PROPOSAL_CONFIG + ' lape, bet tęsiama toliau.');
+      // This can be a simple warning, no need to throw an error if some are optional
+      Logger.log(`Warning: Column "${colName}" not found in sheet "${CONFIG.SHEET_NAMES.PROPOSAL_CONFIG}".`);
     }
   }
 
-  const proposalColumnToShowIndex = sheetProposalHeaders.indexOf('pasiulymas_stulpeliai_rodyti');
-  const proposalColumnEditableIndex = sheetProposalHeaders.indexOf('redaguoti');
-  const proposalColumnDropdownLinkIndex = sheetProposalHeaders.indexOf('dropdown_link');
-  const proposalColumnAutoUpdateIndex = sheetProposalHeaders.indexOf('autoupdate_to_pasiulymas');
+  // Read all data from the proposal config sheet at once
+  const proposalConfigData = sheetProposal.getLastRow() > 1 ? sheetProposal.getRange(2, 1, sheetProposal.getLastRow() - 1, sheetProposal.getLastColumn()).getValues() : [];
 
-  const maxProposalRows = sheetProposal.getLastRow() - 1;
-  const proposalSelectedColumns = sheetProposal.getRange(2, proposalColumnToShowIndex + 1, maxProposalRows, 1).getValues().flat().filter(String).map(col => col.trim());
-  const proposalEditableColumns = sheetProposal.getRange(2, proposalColumnEditableIndex + 1, maxProposalRows, 1).getValues().flat();
-  const proposalDropdownLinkColumns = sheetProposal.getRange(2, proposalColumnDropdownLinkIndex + 1, maxProposalRows, 1).getValues().flat();
-  const proposalAutoUpdateColumns = proposalColumnAutoUpdateIndex !== -1 ? sheetProposal.getRange(2, proposalColumnAutoUpdateIndex + 1, maxProposalRows, 1).getValues().flat() : new Array(maxProposalRows).fill('');
+  const getProposalColumnData = (headerName) => {
+    const index = sheetProposalHeaders.indexOf(headerName);
+    if (index === -1) return new Array(proposalConfigData.length).fill('');
+    return proposalConfigData.map(row => row[index]);
+  };
+
+  const proposalSelectedColumns = getProposalColumnData('pasiulymas_stulpeliai_rodyti').filter(String).map(col => col.toString().trim());
+  const proposalEditableColumns = getProposalColumnData('redaguoti');
+  const proposalDropdownLinkColumns = getProposalColumnData('dropdown_link');
+  const proposalAutoUpdateColumns = getProposalColumnData('autoupdate_to_pasiulymas');
 
   // Load auto-display config
   const autoDisplayHeaders = sheetProposalAutoDisplay.getRange(1, 1, 1, sheetProposalAutoDisplay.getLastColumn()).getValues()[0];

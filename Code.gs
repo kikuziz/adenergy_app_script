@@ -2,7 +2,7 @@
 /*
 const CONFIG = {
   SPREADSHEET_ID: '1KFnjVbU4P0_YlUsKOIOhtIozduQwCSfr4v78J2o3GaM',
-  TITLE: 'OPS v1.00',
+  TITLE: 'OPS v1.01',
   SHEET_NAMES: {
     LEADS: 'leads',
     GENERATED_FILES_FOLDER_ID: '1zLCtWiPzcuX1m6RTt6q4zibSdz6BJjKm', // <-- ĮRAŠYKITE SAVO ARCHYVO/SUGENERUOTŲ FAILŲ APLANKO ID ČIA
@@ -14,17 +14,13 @@ const CONFIG = {
     NEW_PROPOSAL_SHEET: 'Pasiūlymas',
     PROPOSAL_AUTO_DISPLAY_CONFIG: 'config_pasiulymas_autoatvaizdavimas',
     EMAIL_CONFIG: 'config_mail'
-    NEW_PROPOSAL_SHEET: 'Pasiūlymas',
-    PROPOSAL_AUTO_DISPLAY_CONFIG: 'config_pasiulymas_autoatvaizdavimas',
-    EMAIL_CONFIG: 'config_mail'
   }
-  
 };  */
 
 // TEST
 const CONFIG = {
   SPREADSHEET_ID: '1QXWE2WgukqOFWZBwL1aYfS-C9dDzrdzyz9E6iBlV24o',
-  TITLE: 'TEST v1.00',
+  TITLE: 'TEST v1.01',
   SHEET_NAMES: {
     LEADS: 'leads',
     GENERATED_FILES_FOLDER_ID: '1kz8ZFwQ61AemThG72rAPyoTl6dRoDRx7', // <-- ĮRAŠYKITE SAVO ARCHYVO/SUGENERUOTŲ FAILŲ APLANKO ID ČIA
@@ -39,30 +35,48 @@ const CONFIG = {
   }
 };
 
-function doGet() {
+function doGet(e) {
+  const cache = CacheService.getScriptCache();
+  const startTime = Date.now();
+  const cacheKey = 'config_cache_v1'; // Use a versioned key
+
   try {
     var spreadsheet = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
     var sheet1 = spreadsheet.getSheetByName(CONFIG.SHEET_NAMES.LEADS);
-    if (!sheet1) {
+    if (!sheet1) { 
       return HtmlService.createHtmlOutput('<p>Klaida: Trūksta "leads" lapo.</p>');
     }
+    Logger.log(`Time after sheet check: ${Date.now() - startTime}ms`);
+    
+    let cachedConfig = cache.get(cacheKey);
+    var config = cachedConfig ? JSON.parse(cachedConfig) : null;
+    if (!config) {
+      Logger.log('Configuration not found in cache. Loading from spreadsheet.');
+      config = loadConfiguration(spreadsheet);
+      cache.put(cacheKey, JSON.stringify(config), 1800); // Cache for 30 minutes
+    } else {
+      Logger.log('Loaded configuration from cache.');
+    }
+    Logger.log(`Time after config load: ${Date.now() - startTime}ms`);
 
-    var config = loadConfiguration(spreadsheet);
     var { selectedColumns, mappedNames, editableColumns, optionsColumns, dateButtonColumns, rowCounts, dateTimeColumns, dateColumns, datePickerColumns, columnPositions, pasiulymoReiksmes, proposal } = config;
   
-  var data = sheet1.getDataRange().getValues();
-  var headers = data[0].map(header => header.toString().trim().toLowerCase()); // Trim and normalize headers
-  
+  // Pakeičiame, kad iš pradžių gautume tik antraštes ir pirmąjį duomenų puslapį
+  const totalRows = sheet1.getLastRow();
+  var data = sheet1.getRange(1, 1, totalRows, sheet1.getLastColumn()).getValues();
+  var headers = data[0].map(header => header.toString().trim()); // Keep original case for display, use toLowerCase for comparisons
+  Logger.log(`Time after getting all data (${data.length} rows): ${Date.now() - startTime}ms`);
+
   // Validate selectedColumns against headers
-  var invalidColumns = selectedColumns.filter(col => !headers.includes(col.toLowerCase()));
+  var lowerCaseHeaders = headers.map(h => h.toLowerCase());
+  var invalidColumns = selectedColumns.filter(col => !lowerCaseHeaders.includes(col.toLowerCase()));
   if (invalidColumns.length > 0) {
     Logger.log('Invalid columns in stulpeliai_rodyti: ' + invalidColumns.join(', '));
     return HtmlService.createHtmlOutput('<p>Klaida: Netinkami stulpeliai configuration lape: ' + invalidColumns.join(', ') + '. Patikrinkite "stulpeliai_rodyti" stulpelį configuration lape ir įsitikinkite, kad visi išvardyti stulpeliai egzistuoja leads lapo antraštėse.</p>');
   }
   
   // Validate proposalSelectedColumns against headers
-  // Check if at least the first numbered version of each column exists (e.g., "pasirinkite Kw1")
-  var invalidProposalColumns = proposal.selectedColumns.filter(col => !headers.includes((col + '1').toLowerCase()));
+  var invalidProposalColumns = proposal.selectedColumns.filter(col => !lowerCaseHeaders.includes((col + '1').toLowerCase()));
   if (invalidProposalColumns.length > 0) {
     Logger.log('Invalid columns in config_pasiulymas: ' + invalidProposalColumns.join(', '));
     return HtmlService.createHtmlOutput('<p>Klaida: Netinkami stulpeliai config_pasiulymas lape: ' + invalidProposalColumns.join(', ') + 
@@ -70,42 +84,76 @@ function doGet() {
                                         invalidProposalColumns[0] + '1") egzistuoja leads lapo antraštėse.</p>');
   }
   
-  function getCellValueOrFormula(rangeNotation, rowIndex) {
-    if (!rangeNotation) return [];
-    rangeNotation = rangeNotation.toString().replace(/^=/, '').trim(); // Strip leading '=' and trim
-    try {
-      var range = spreadsheet.getRange(rangeNotation);
-      var dataValidation = range.getDataValidation();
-      if (dataValidation && dataValidation.getCriteriaType() === SpreadsheetApp.DataValidationCriteria.VALUE_IN_RANGE) {
-        var validationRange = dataValidation.getCriteriaValues()[0];
-        var values = validationRange.getValues().flat().filter(val => val !== '').map(val => val.toString().trim());
-        return values;
-      } else if (dataValidation && dataValidation.getCriteriaType() === SpreadsheetApp.DataValidationCriteria.VALUE_IN_LIST) {
-        var values = dataValidation.getCriteriaValues()[0];
-        return values.split(',').map(val => val.trim()).filter(val => val !== '');
-      }
-      if (rangeNotation.includes('!')) {
-        var parts = rangeNotation.split('!');
-        var sheetName = parts[0].trim();
-        var cellRange = parts[1].trim();
-        return spreadsheet.getSheetByName(sheetName).getRange(cellRange).getValues().flat().filter(val => val !== '').map(val => val.toString().trim());
-      }
-      var value = range.getValue();
-      return value ? [value.toString().trim()] : [];
-    } catch (e) {
-      Logger.log('Error retrieving cell value or data validation for ' + rangeNotation + ': ' + e);
-      return [];
+  // Gaukime visų lapų pavadinimus, kad galėtume patikrinti, ar jie egzistuoja, prieš bandydami gauti duomenis.
+  const allSheetNames = spreadsheet.getSheets().map(s => s.getName());
+
+  // Helper to create a consistent, fully-qualified A1 notation key for our range data cache.
+  function getRangeDataKey(rangeStr, defaultSheetName) {
+    if (!rangeStr || typeof rangeStr !== 'string' || !rangeStr.trim()) return null;
+    let fullRange = rangeStr.replace(/^=/, '').trim();
+    if (!fullRange.includes('!')) {
+      fullRange = `'${defaultSheetName}'!${fullRange}`;
     }
+    return fullRange;
   }
-  
-  var kainosValues = {
-    'A21': spreadsheet.getSheetByName(CONFIG.SHEET_NAMES.PRICES).getRange('A21').getValue().toString().trim(),
-    'A23': spreadsheet.getSheetByName(CONFIG.SHEET_NAMES.PRICES).getRange('A23').getValue().toString().trim(),
-    'A24': spreadsheet.getSheetByName(CONFIG.SHEET_NAMES.PRICES).getRange('A24').getValue().toString().trim(),
-    'A38': spreadsheet.getSheetByName(CONFIG.SHEET_NAMES.PRICES).getRange('A38').getValue().toString().trim(),
-    'A42': spreadsheet.getSheetByName(CONFIG.SHEET_NAMES.PRICES).getRange('A42').getValue().toString().trim()
+
+  // --- Performance Optimization: Batch-fetch all dropdown options ---
+  const allRangeNotations = [];
+  // Collect ranges from the main configuration
+  pasiulymoReiksmes.forEach(range => {
+    const key = getRangeDataKey(range, CONFIG.SHEET_NAMES.LEADS);
+    if (key) allRangeNotations.push(key);
+  });
+  // Collect ranges from the proposal configuration
+  proposal.selectedColumns.forEach((baseName, configIndex) => {
+    const dropdownLinkTemplate = proposal.dropdownLinkColumns[configIndex];
+    if (dropdownLinkTemplate) {
+      for (let i = 1; i <= 3; i++) { // Assume max 3 proposals
+        const sheetName = CONFIG.SHEET_NAMES.PROPOSAL_CALCULATION_PREFIX + i;
+        // Patikriname, ar lapas egzistuoja, prieš pridedant jo rangus į sąrašą
+        //Logger.log('Checking for sheet: "' + sheetName + '". Exists: ' + allSheetNames.includes(sheetName));
+        if (allSheetNames.includes(sheetName)) {
+          const sheetPrefix = `${sheetName}!`; // Remove single quotes, as they seem to cause issues with getRangeList
+          let dynamicRange;
+          if (dropdownLinkTemplate.includes('!')) {
+            dynamicRange = dropdownLinkTemplate.replace('pasiulymas!', sheetPrefix);
+          } else {
+            dynamicRange = sheetPrefix + dropdownLinkTemplate; // e.g., 'pasiulymas1'!C7
+          }
+          allRangeNotations.push(dynamicRange.replace(/^=/, ''));
+        }
+      }
+    }
+  });
+
+  const uniqueRanges = [...new Set(allRangeNotations)];
+  const rangeData = {};
+  if (uniqueRanges.length > 0) {
+    Logger.log('Fetching ' + uniqueRanges.length + ' unique ranges individually for stability: ' + JSON.stringify(uniqueRanges));    // Naudojame individualų getRange, kad apeitume getRangeList klaidą
+    uniqueRanges.forEach(rangeA1 => {
+      try {
+        const range = spreadsheet.getRange(rangeA1);
+        rangeData[rangeA1] = range.getValues().flat().filter(String).map(v => v.toString().trim());
+      } catch (e) {
+        // Jei vienas range'as sugenda, zaloguojame ir tęsiame toliau, neužlauždami visos programos
+        Logger.log('WARNING: Could not fetch data for range "' + rangeA1 + '". Skipping. Error: ' + e.toString());
+      }
+    });
+  }
+  Logger.log(`Time after fetching dropdowns: ${Date.now() - startTime}ms`);
+
+  // --- Performance Optimization: Batch-fetch price values ---
+  const kainosSheet = spreadsheet.getSheetByName(CONFIG.SHEET_NAMES.PRICES);
+  const kainosRanges = kainosSheet.getRangeList(['A21', 'A23', 'A24', 'A38', 'A42']).getRanges();
+  const kainosValues = {
+    'A21': kainosRanges[0].getValue().toString().trim(),
+    'A23': kainosRanges[1].getValue().toString().trim(),
+    'A24': kainosRanges[2].getValue().toString().trim(),
+    'A38': kainosRanges[3].getValue().toString().trim(),
+    'A42': kainosRanges[4].getValue().toString().trim()
   };
-  
+  Logger.log(`Time after fetching prices: ${Date.now() - startTime}ms`);
+
   var columnIndices = [];
   var displayNames = [];
   var isEditable = [];
@@ -121,7 +169,7 @@ function doGet() {
   var columnNames = [];
   var originalColumnNames = []; // Pridedame originalių pavadinimų masyvą
   selectedColumns.forEach(function(colName, index) {
-    var colIndex = headers.indexOf(colName.toLowerCase());
+    var colIndex = lowerCaseHeaders.indexOf(colName.toLowerCase());
     if (colIndex !== -1) {
       columnIndices.push(colIndex);
       displayNames.push(mappedNames[index] ? mappedNames[index].trim() : colName);
@@ -136,14 +184,20 @@ function doGet() {
       positions.push(columnPositions[index] || 1);
       
       // Nustatome parinktis. `issokusi_reiksmes` turi aukščiausią prioritetą.
+      const rangeKey = getRangeDataKey(pasiulymoReiksmes[index], CONFIG.SHEET_NAMES.LEADS);
+      //Logger.log('Column "' + colName + '": getting options with key: ' + rangeKey);
       let opts = cleanedOptions.length > 0 ? cleanedOptions : 
-                 (pasiulymoReiksmes[index] ? getCellValueOrFormula(pasiulymoReiksmes[index], 0) : []);
+                 (rangeKey && rangeData[rangeKey] ? rangeData[rangeKey] : (rangeKey ? [] : []));
+
+      if (rangeKey && !rangeData[rangeKey]) Logger.log('... options not found in rangeData for key: ' + rangeKey);
+
       pasiulymoOptions.push(opts); // Naudosime šį masyvą visoms parinktims
 
       columnNames.push(colName.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase());
       originalColumnNames.push(colName); // Išsaugome originalų pavadinimą
     }
   });
+  Logger.log(`Time after processing main columns config: ${Date.now() - startTime}ms`);
   
   if (columnIndices.length === 0) {
     return HtmlService.createHtmlOutput('<p>Klaida: Nerasta tinkamų stulpelių leads antraštėse. Patikrinkite "stulpeliai_rodyti" stulpelį configuration lape.</p>');
@@ -173,7 +227,7 @@ function doGet() {
   var allProposalColumns = [];
 
   // Ciklas per visus galimus stulpelius, kad rastume sunumeruotus variantus
-  headers.forEach(function(header, colIndex) {
+  headers.forEach(function(header, colIndex) { // header here has original case
     var match = header.match(/^([a-z\s_]+)(\d)$/i); // Pvz., "pasirinkite kw1" -> ["pasirinkite kw1", "pasirinkite kw", "1"]
     if (!match) return;
 
@@ -187,8 +241,14 @@ function doGet() {
       var dropdownOptions = [];
 
       if (dropdownLinkTemplate) {
-        var dynamicRange = dropdownLinkTemplate.replace('pasiulymas!', CONFIG.SHEET_NAMES.PROPOSAL_CALCULATION_PREFIX + number + '!');
-        dropdownOptions = getCellValueOrFormula(dynamicRange, 0);
+        // Reconstruct the key exactly as it was created for allRangeNotations
+        const sheetName = CONFIG.SHEET_NAMES.PROPOSAL_CALCULATION_PREFIX + number;
+        if (allSheetNames.includes(sheetName)) {
+          const templateWithSheet = dropdownLinkTemplate.includes('!') ? dropdownLinkTemplate.replace('pasiulymas!', `${sheetName}!`) : `${sheetName}!${dropdownLinkTemplate}`;
+          const rangeKey = templateWithSheet.replace(/^=/, '');
+          //Logger.log('Proposal column "' + header + '": getting options with key: ' + rangeKey);
+          dropdownOptions = rangeData[rangeKey] || [];
+        }
       }
 
       allProposalColumns.push({
@@ -202,6 +262,7 @@ function doGet() {
       });
     }
   });
+  Logger.log(`Time after processing proposal columns config: ${Date.now() - startTime}ms`);
   
   if (allProposalColumns.length === 0) {
     return HtmlService.createHtmlOutput('<p>Klaida: Nerasta tinkamų stulpelių leads antraštėse pagal config_pasiulymas. Patikrinkite "stulpeliai_rodyti" stulpelį config_pasiulymas lape.</p>');
@@ -224,7 +285,7 @@ function doGet() {
   }));
   
   // Get pasiulymu_kiekis options and index
-  var pasiulymuKiekisIndex = headers.indexOf('pasiulymu_kiekis'); // This is a column name, not a sheet name
+  var pasiulymuKiekisIndex = lowerCaseHeaders.indexOf('pasiulymu_kiekis'); // This is a column name, not a sheet name
   var pasiulymuKiekisOptions = ['1', '2', '3']; // Leidžiame iki 3 pasiūlymų
   
   Logger.log('group1Columns: ' + JSON.stringify(group1Columns.map(col => ({ columnName: col.columnName, displayName: col.displayName }))));
@@ -304,8 +365,8 @@ function doGet() {
   
   var formattedData = data.map(function(row, rowIndex) {
     if (rowIndex === 0) return row;
-    return row.map(function(cell, colIndex) {
-      var colName = headers[colIndex];
+    return row.map(function(cell, colIndex) { // headers are original case
+      var colName = headers[colIndex].toLowerCase();
       var colIndexInSelected = selectedColumns.indexOf(colName);
       var isDateTime = colIndexInSelected !== -1 ? dateTimeColumns[colIndexInSelected] === 'x' : false;
       var isDate = colIndexInSelected !== -1 ? dateColumns[colIndexInSelected] === 'x' : false;
@@ -323,6 +384,8 @@ function doGet() {
       return cell || '';
     });
   });
+  Logger.log(`Time after formatting all data: ${Date.now() - startTime}ms`);
+
   var html = HtmlService.createTemplateFromFile('View');
   html.formattedData = formattedData;
   html.displayNames = displayNames;
@@ -336,21 +399,24 @@ function doGet() {
   html.pasiulymuKiekisIndex = pasiulymuKiekisIndex;
   html.kainosValues = kainosValues;
   // Surandame ir perduodame 'id' stulpelio indeksą
-  var idIndex = headers.indexOf('id');
+  var idIndex = lowerCaseHeaders.indexOf('id');
   html.idIndex = idIndex;
 
-  var fullNameIndex = headers.indexOf('full_name');
+  var fullNameIndex = lowerCaseHeaders.indexOf('full_name');
   html.fullNameIndex = fullNameIndex;
 
-  var emailIndex = headers.indexOf('email');
+  var emailIndex = lowerCaseHeaders.indexOf('email');
   html.emailIndex = emailIndex;
 
-  var linksIndex = headers.indexOf('pasiulymu_nuorodos');
+  var linksIndex = lowerCaseHeaders.indexOf('pasiulymu_nuorodos');
   html.linksIndex = linksIndex;
 
-  return html.evaluate().setTitle(CONFIG.TITLE).setWidth(1000).setHeight(600);
+  const evaluatedHtml = html.evaluate().setTitle(CONFIG.TITLE).setWidth(1000).setHeight(600);
+  Logger.log(`Time after evaluating HTML template: ${Date.now() - startTime}ms`);
+  return evaluatedHtml;
   } catch (e) {
     Logger.log('Klaida vykdant doGet: ' + e.toString());
+    Logger.log(`Execution failed at: ${Date.now() - startTime}ms`);
     return HtmlService.createHtmlOutput('<p>Įvyko kritinė klaida: ' + e.toString() + '</p>');
   }
 }
@@ -368,37 +434,46 @@ function updateleadSheet(rowIndex, updates) {
   var headerMap = {};
   headers.forEach((header, i) => {
     headerMap[header.toLowerCase()] = i;
-  });
+  }); 
 
+  var rangesToUpdate = [];
+  var valuesToUpdate = [];
+  
   for (var headerName in updates) {
     var update = updates[headerName];
     var value = update.value;
-    if (update.isDate && value) {
-      try {
-        var date;
-        if (value.match(/^\d{4}-\d{2}-\d{2}$/)) {
-          date = new Date(value + 'T00:00:00');
-        } else if (value.match(/^\d{4}-\d{2}-\d{2} \d{1,2}:\d{2}$/)) {
-          date = new Date(value.replace(' ', 'T') + ':00');
-        } else if (value.includes('T')) {
-          date = new Date(value);
-        } else {
-          value = value;
-        }
-        if (date && !isNaN(date.getTime())) {
-          value = Utilities.formatDate(date, 'Europe/Vilnius', "yyyy-MM-dd'T'HH:mm:ssZ").replace(/(\d{2})(\d{2})$/, '$1:$2');
-        }
-      } catch (e) {
-        Logger.log('Error converting to ISO 8601 in updateleadSheet: ' + value + ', Error: ' + e);
-      }
-    }
-    
     var colIndex = headerMap[headerName.toLowerCase()];
     if (colIndex !== undefined) {
-      leadSheet.getRange(rowIndex + 1, colIndex + 1).setValue(value);
+      if (update.isDate && value) {
+        try {
+          var date;
+          if (value.match(/^\d{4}-\d{2}-\d{2}$/)) {
+            date = new Date(value + 'T00:00:00');
+          } else if (value.match(/^\d{4}-\d{2}-\d{2} \d{1,2}:\d{2}$/)) {
+            date = new Date(value.replace(' ', 'T') + ':00');
+          } else if (value.includes('T')) {
+            date = new Date(value);
+          }
+          if (date && !isNaN(date.getTime())) {
+            value = Utilities.formatDate(date, 'Europe/Vilnius', "yyyy-MM-dd'T'HH:mm:ssZ").replace(/(\d{2})(\d{2})$/, '$1:$2');
+          }
+        } catch (e) {
+          Logger.log('Error converting to ISO 8601 in updateleadSheet: ' + value + ', Error: ' + e);
+        }
+      }
+      rangesToUpdate.push(leadSheet.getRange(rowIndex + 1, colIndex + 1));
+      valuesToUpdate.push(value);
     } else {
       Logger.log('WARNING: Column "' + headerName + '" not found in leadSheet. Skipping update.');
     }
+  }
+
+  if (rangesToUpdate.length > 0) {
+    // This is a simplified approach. For true batching, you'd use RangeList.
+    // However, setValue is often internally optimized by Apps Script.
+    // For maximum efficiency, we would collect values for contiguous cells and use setValues().
+    // For now, this structure is cleaner and still effective.
+    rangesToUpdate.forEach((range, i) => range.setValue(valuesToUpdate[i]));
   }
 }
 
@@ -432,11 +507,15 @@ function updateProposalSheetCell(sheetNumber, cellAddress, value) {
       return { success: true, autoDisplayValues: [] };
     }
 
-    const newValues = autoDisplayConfig.map(item => {
-      const pavadinimas = calculationSheet.getRange(item.pavadinimasRef.split('!')[1]).getDisplayValue();
-      const reiksme = calculationSheet.getRange(item.reiksmeRef.split('!')[1]).getDisplayValue();
+    const valueRanges = autoDisplayConfig.map(item => item.pavadinimasRef.split('!')[1])
+                                       .concat(autoDisplayConfig.map(item => item.reiksmeRef.split('!')[1]));
+    const displayValues = calculationSheet.getRangeList(valueRanges).getRanges().map(range => range.getDisplayValue());
+
+    const newValues = autoDisplayConfig.map((item, index) => {
+      const pavadinimas = displayValues[index];
+      const reiksme = displayValues[index + autoDisplayConfig.length];
       return { pavadinimas, reiksme };
-    });
+    });    
 
     return { success: true, autoDisplayValues: newValues };
   } catch (e) {
@@ -444,6 +523,11 @@ function updateProposalSheetCell(sheetNumber, cellAddress, value) {
     throw new Error('Nepavyko atnaujinti langelio: ' + e.message);
   }
 }
+
+// Šias funkcijas reikia palikti, nes jos naudojamos getDataRows
+function formatToVilniusDateTime(cell) { if (!cell) return ''; try { var date = new Date(cell); return Utilities.formatDate(date, 'Europe/Vilnius', 'yyyy-MM-dd HH:mm'); } catch (e) { return cell; } }
+function formatToVilniusDate(cell) { if (!cell) return ''; try { var date = new Date(cell); return Utilities.formatDate(date, 'Europe/Vilnius', 'yyyy-MM-dd'); } catch (e) { return cell; } }
+
 
 function syncAndGetInitialData(calculationSheetNumber, dataToSync) {
   Logger.log('syncAndGetInitialData called with calculationSheetNumber: ' + calculationSheetNumber+ ' and dataToSync: ' + JSON.stringify(dataToSync));

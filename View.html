@@ -51,6 +51,11 @@
     .pasiulymu_kiekis_select {
       width: 100px;
     }
+    .pagination { display: flex; justify-content: center; margin-top: 20px; gap: 5px; flex-wrap: wrap; }
+    .pagination button { padding: 5px 10px; cursor: pointer; border: 1px solid #ddd; background: white; border-radius: 3px; }
+    .pagination button.active { background-color: #007bff; color: white; border-color: #007bff; }
+    .pagination button:disabled { color: #ccc; cursor: not-allowed; }
+    .pagination span { padding: 5px; }
   </style>
 </head>
 <body>
@@ -67,25 +72,10 @@
 </div>
 
 <table id="dataTable">
-  <tr>
-    <th>Veiksmai</th>
-    <? displayNames.forEach(function(displayName) { ?>
-      <th><?= displayName ?></th>
-    <? }); ?>
-  </tr>
-  
-  <? for (var i = 1; i < formattedData.length; i++) { ?>
-    <tr data-original-index="<?= i ?>">
-      <? 
-        var uniqueId = formattedData[i][idIndex] ? formattedData[i][idIndex].toString() : '';
-      ?>
-      <td><!-- <button class="edit-btn" onclick="showModal(<?= i ?>)">Edit</button> --><button class="proposal-btn" onclick="showProposalModal(<?= i ?>)">Pasiūlymas</button></td>
-      <? columnIndices.forEach(function(idx) { ?>
-        <td><?= formattedData[i][idx] ?></td>
-      <? }); ?>
-    </tr>
-  <? } ?>
+  <tbody></tbody>
 </table>
+
+<div id="paginationControls" class="pagination"></div>
 
 <div id="myModal" class="modal">
   <div class="modal-content">
@@ -120,20 +110,28 @@
 
 <script>
   console.log("Script loaded");
-  var kainosValues = <?!= JSON.stringify(kainosValues) ?>;
-  var allProposalColumns = <?!= JSON.stringify(allProposalColumns) ?>;
+  var kainosValues = <?!= JSON.stringify(kainosValues) ?> || [];
+  var allProposalColumns = <?!= JSON.stringify(allProposalColumns) ?> || [];
   var idIndex = <?!= idIndex ?>;
   var fullNameIndex = <?!= fullNameIndex ?>;
   var emailIndex = <?!= emailIndex ?>;
   var linksIndex = <?!= linksIndex ?>;
-  var formattedData = <?!= JSON.stringify(formattedData) ?>;
-  var autoDisplayConfig = <?!= JSON.stringify(autoDisplayConfig) ?>;
+  var formattedData = <?!= JSON.stringify(formattedData) ?> || [];
+  var allLocalData = Array.isArray(formattedData) ? formattedData.slice() : []; // Sukuriame lokalią kopiją filtravimui
+  var autoDisplayConfig = <?!= JSON.stringify(autoDisplayConfig) ?> || [];
+  var columnIndices = <?!= JSON.stringify(columnIndices) ?> || [];
+  var displayNames = <?!= JSON.stringify(displayNames) ?> || [];
+  var displayNamesLength = <?!= displayNames.length ?>;
   
+  var currentPage = 1;
+  const rowsPerPage = 50; // Galite pakeisti eilučių skaičių puslapyje
+  var filteredData = []; 
+
   $(document).ready(function() {
     console.log("jQuery and jQuery UI loaded");
-    $(".datepicker").datepicker({
+    $(document.body).on('focus', '.datepicker', function(){ $(this).datepicker({
       dateFormat: "yy-mm-dd", showButtonPanel: true, changeMonth: true, changeYear: true
-    });
+    }); });
     $("#filterInput").on("input", function() {
       applyFilter();
     });
@@ -151,42 +149,109 @@
       }
       toggleInlineEdit(this);
     });
+    
+    initData();
   });
+  
+  function initData() {
+    filteredData = [];
+    // Praleidžiame antraštę (indeksas 0), pradedame nuo 1
+    for (var i = 1; i < allLocalData.length; i++) {
+      filteredData.push({ originalIndex: i, row: allLocalData[i] });
+    }
+    renderTable(1);
+  }
+
+  function renderTable(page) {
+    currentPage = page;
+    var tableBody = document.querySelector("#dataTable tbody");
+    
+    // Sukuriame antraštę
+    var headerHtml = "<tr><th>Veiksmai</th>";
+    displayNames.forEach(function(name) { headerHtml += "<th>" + name + "</th>"; });
+    headerHtml += "</tr>";
+
+    var start = (page - 1) * rowsPerPage;
+    var end = start + rowsPerPage;
+    var pageItems = filteredData.slice(start, end);
+    
+    var html = headerHtml;
+    pageItems.forEach(function(item) {
+      var row = item.row;
+      var i = item.originalIndex;
+      html += "<tr data-original-index='" + i + "'><td><button class=\"proposal-btn\" onclick=\"showProposalModal(" + i + ")\">Pasiūlymas</button></td>";
+      columnIndices.forEach(function(idx) {
+        html += "<td>" + (row[idx] || "") + "</td>";
+      });
+      html += "</tr>";
+    });
+    tableBody.innerHTML = html;
+    renderPagination();
+  }
+
+  function renderPagination() {
+    var totalPages = Math.ceil(filteredData.length / rowsPerPage);
+    var paginationDiv = document.getElementById("paginationControls");
+    var html = "";
+    
+    if (totalPages <= 1) {
+      paginationDiv.innerHTML = "";
+      return;
+    }
+
+    function createButton(text, page, isActive, isDisabled) {
+      var className = isActive ? "class='active'" : "";
+      var disabled = isDisabled ? "disabled" : "";
+      var onclick = isDisabled ? "" : "onclick='renderTable(" + page + ")'";
+      return "<button " + className + " " + disabled + " " + onclick + ">" + text + "</button>";
+    }
+
+    html += createButton("<<", 1, false, currentPage === 1);
+    html += createButton("<", currentPage - 1, false, currentPage === 1);
+
+    var startPage = Math.max(1, currentPage - 2);
+    var endPage = Math.min(totalPages, currentPage + 2);
+
+    if (startPage > 1) {
+        html += createButton("1", 1, false, false);
+        if (startPage > 2) html += "<span>...</span>";
+    }
+
+    for (var i = startPage; i <= endPage; i++) {
+      html += createButton(i, i, currentPage === i, false);
+    }
+
+    if (endPage < totalPages) {
+        if (endPage < totalPages - 1) html += "<span>...</span>";
+        html += createButton(totalPages, totalPages, false, false);
+    }
+
+    html += createButton(">", currentPage + 1, false, currentPage === totalPages);
+    html += createButton(">>", totalPages, false, currentPage === totalPages);
+
+    paginationDiv.innerHTML = html;
+  }
 
   function applyFilter() {
     var filterColumn = $("#filterColumn").val();
     var filterValue = $("#filterInput").val().toLowerCase();
-    // Pridedame originalų indeksą, kad galėtume teisingai iškviesti modalinius langus
-    var data = formattedData.slice(1).map(function(row, index) {
-      row.originalIndex = index + 1; // +1, nes praleidžiame antraštę
-      return row;
-    });
-    var indices = <?!= JSON.stringify(columnIndices) ?>;
-    var displayNames = <?!= JSON.stringify(displayNames) ?>;
-    var table = document.getElementById("dataTable");
-    table.innerHTML = "";
-    var html = "<tr><th>Veiksmai</th>";
-    for (var i = 0; i < displayNames.length; i++) {
-      html += "<th>" + displayNames[i] + "</th>";
-    }
-    html += "</tr>";
-    for (var i = 0; i < data.length; i++) {
-      var row = data[i];
-      var matches = filterColumn === "all" ? row.some(function(cell) { return cell && cell.toString().toLowerCase().includes(filterValue); }) : 
-        row[indices[filterColumn]] && row[indices[filterColumn]].toString().toLowerCase().includes(filterValue);
-      if (matches) {
-        var originalIndex = data[i].originalIndex;
-        var uniqueId = formattedData[originalIndex][idIndex] ? formattedData[originalIndex][idIndex].toString() : '';
 
-        html += "<tr data-original-index='" + originalIndex + "'><td><!-- <button class=\"edit-btn\" onclick=\"showModal(" + originalIndex + ")\">Edit</button> --><button class=\"proposal-btn\" onclick=\"showProposalModal(" + originalIndex + ")\">Pasiūlymas</button></td>";
-        for (var j = 0; j < indices.length; j++) {
-          var value = row[indices[j]] || "";
-          html += "<td>" + value + "</td>";
-        }
-        html += "</tr>";
+    filteredData = [];
+    for (var i = 1; i < allLocalData.length; i++) { // Pradedame nuo 1, kad praleistume antraštę
+      var rowData = allLocalData[i];
+      var matches = false;
+      if (filterColumn === "all") {
+        matches = rowData.some(function(cell) { return cell && cell.toString().toLowerCase().includes(filterValue); });
+      } else {
+        var cellValue = rowData[columnIndices[filterColumn]];
+        matches = cellValue && cellValue.toString().toLowerCase().includes(filterValue);
+      }
+
+      if (matches) {
+        filteredData.push({ originalIndex: i, row: rowData });
       }
     }
-    table.innerHTML = html;
+    renderTable(1);
   }
 
   function updateDependentFields(tableIndex) {
@@ -198,7 +263,7 @@
   function showModal(index) {
     console.log("showModal called with index: " + index);
     var rowIndex = index;
-    var data = <?!= JSON.stringify(formattedData.slice(1)) ?>;
+    var data = allLocalData.slice(1);
     var group1Columns = <?!= JSON.stringify(group1Columns) ?>;
     var group2Columns = <?!= JSON.stringify(group2Columns) ?>;
     var modal = document.getElementById("myModal");
@@ -234,7 +299,7 @@
     console.log("showProposalModal called with index: " + index);
 
     var rowIndex = index;
-    var data = <?!= JSON.stringify(formattedData.slice(1)) ?>;
+    var data = allLocalData.slice(1);
     var proposalColumns = <?!= JSON.stringify(proposalColumns) ?>;
     var pasiulymuKiekisOptions = <?!= JSON.stringify(pasiulymuKiekisOptions) ?>;
     var pasiulymuKiekisIndex = <?!= pasiulymuKiekisIndex ?>;
@@ -351,7 +416,7 @@
 
     // --- Nuoseklus duomenų sinchronizavimas ir auto-atvaizdavimo eilučių įkėlimas ---
     if (autoDisplayConfig && autoDisplayConfig.length > 0) {
-      var syncData = <?!= JSON.stringify(formattedData.slice(1)) ?>;
+      var syncData = allLocalData.slice(1);
       var syncAllProposalColumns = <?!= JSON.stringify(allProposalColumns) ?>;
 
       // Ciklas per pasiūlymus (1, 2, 3)
@@ -570,12 +635,12 @@
     $('.edit-row').remove();
 
     var originalIndex = $row.data('original-index');
-    var data = <?!= JSON.stringify(formattedData.slice(1)) ?>;
+    var data = allLocalData.slice(1);
     var group1Columns = <?!= JSON.stringify(group1Columns) ?>;
     var group2Columns = <?!= JSON.stringify(group2Columns) ?>;
 
     var newRow = $('<tr class="edit-row"></tr>');
-    var cell = $('<td colspan="' + (<?!= displayNames.length ?> + 1) + '"></td>');
+    var cell = $('<td colspan="' + (displayNamesLength + 1) + '"></td>');
     
     var editFormHtml = '<div style="padding: 20px; background-color: #f9f9f9; border: 1px solid #ddd;"><div id="eilutes_redagavimas">';
     editFormHtml += '<h3>Redaguoti eilutę</h3>';
@@ -711,7 +776,7 @@
 
     // --- Nuoseklus duomenų sinchronizavimas ir auto-atvaizdavimo eilučių įkėlimas (INLINE) ---
     if (autoDisplayConfig && autoDisplayConfig.length > 0) {
-      var syncData = <?!= JSON.stringify(formattedData.slice(1)) ?>;
+      var syncData = allLocalData.slice(1);
       var syncAllProposalColumns = <?!= JSON.stringify(allProposalColumns) ?>;
 
       // Ciklas per pasiūlymus (1, 2, 3)
