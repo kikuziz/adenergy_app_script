@@ -167,7 +167,7 @@
     var tableBody = document.querySelector("#dataTable tbody");
     
     // Sukuriame antraštę
-    var headerHtml = "<tr><th>Veiksmai</th>";
+    var headerHtml = "<tr>";
     displayNames.forEach(function(name) { headerHtml += "<th>" + name + "</th>"; });
     headerHtml += "</tr>";
 
@@ -179,7 +179,7 @@
     pageItems.forEach(function(item) {
       var row = item.row;
       var i = item.originalIndex;
-      html += "<tr data-original-index='" + i + "'><td><button class=\"proposal-btn\" onclick=\"showProposalModal(" + i + ")\">Pasiūlymas</button></td>";
+      html += "<tr data-original-index='" + i + "'>";
       columnIndices.forEach(function(idx) {
         html += "<td>" + (row[idx] || "") + "</td>";
       });
@@ -640,7 +640,7 @@
     var group2Columns = <?!= JSON.stringify(group2Columns) ?>;
 
     var newRow = $('<tr class="edit-row"></tr>');
-    var cell = $('<td colspan="' + (displayNamesLength + 1) + '"></td>');
+    var cell = $('<td colspan="' + displayNamesLength + '"></td>');
     
     var editFormHtml = '<div style="padding: 20px; background-color: #f9f9f9; border: 1px solid #ddd;"><div id="eilutes_redagavimas">';
     editFormHtml += '<h3>Redaguoti eilutę</h3>';

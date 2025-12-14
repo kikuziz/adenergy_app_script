@@ -19,7 +19,7 @@ const CONFIG = {
 
 // TEST
 const CONFIG = {
-  SPREADSHEET_ID: '1QXWE2WgukqOFWZBwL1aYfS-C9dDzrdzyz9E6iBlV24o',
+  SPREADSHEET_ID: '186Q3q4QVgS4QnE_Q9GUpEbOVxsgjfm8k0RMVxchVSlg',
   TITLE: 'TEST v1.01',
   SHEET_NAMES: {
     LEADS: 'leads',
