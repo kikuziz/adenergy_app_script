@@ -1,7 +1,6 @@
 {
-  "scriptId": "10eyG7DAeragUTdM4mjEIgghMq7lGp161GqqGgg5iTG64l56sr_qBQHNM",
+  "scriptId": "1w82PUfcRlWptHZbgoUVlQCYV7O-LusvvcfiCF0GTYDwxGiYU78V10DpS",
   "rootDir": "",
-  "projectId": "https://script.google.com/home/projects/10eyG7DAeragUTdM4mjEIgghMq7lGp161GqqGgg5iTG64l56sr_qBQHNM/edit",
   "scriptExtensions": [
     ".js",
     ".gs"
@@ -12,5 +11,6 @@
   "jsonExtensions": [
     ".json"
   ],
-  "filePushOrder": []
+  "filePushOrder": [],
+  "skipSubdirectories": false
 }

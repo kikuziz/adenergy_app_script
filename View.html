@@ -1,8 +1,10 @@
 <!DOCTYPE html>
 <html>
 <head>
+  <script src="https://apis.google.com/js/platform.js" async defer></script>
+  <meta name="google-signin-client_id" content="985871275472-ebm88770dg16rv0fubpl2o0etvmd6jn8.apps.googleusercontent.com">
   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-  <script src="https://code.jquery.com/ui/1.12.1/jquery-ui.min.js"></script>
+  <script src="https://code.jquery.com/ui/1.12.1/jquery-ui.min.js"></script>  
   <link rel="stylesheet" href="https://code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css">
   <style>
     table {border-collapse: collapse; width: 45%; font-family: Arial, sans-serif;}
@@ -69,6 +71,8 @@
     <? }); ?>
   </select>
   <input type="text" id="filterInput" placeholder="Įveskite filtravimo tekstą">
+  <button id="sortStatusBtn" style="margin-left: 10px; background-color: #673AB7; color: white;">Surikiuoti pagal Statusą</button>
+  <div class="g-signin2" data-onsuccess="onSignIn"></div>
 </div>
 
 <table id="dataTable">
@@ -137,6 +141,12 @@
     });
     $("#filterColumn").on("change", function() {
       applyFilter();
+    });
+
+    $("#sortStatusBtn").on("click", function() {
+      if (confirm('Ar tikrai norite surikiuoti duomenis pagal "Statusas" stulpelį? Puslapis bus perkrautas.')) {
+        google.script.run.withSuccessHandler(function() { location.reload(); }).sortLeadsByStatus();
+      }
     });
 
     // Pridedame paspaudimo ant eilutės funkcionalumą

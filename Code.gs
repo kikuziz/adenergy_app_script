@@ -865,3 +865,28 @@ function sudelioti_pasiulyma(sourceSpreadsheet, targetSpreadsheet, rowData){
         throw new Error('Error copying data: ' + e.message);
     }
 }
+
+function sortLeadsByStatus() {
+  try {
+    var spreadsheet = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
+    var sheet = spreadsheet.getSheetByName(CONFIG.SHEET_NAMES.LEADS);
+    
+    if (!sheet) {
+      throw new Error('Lapas "' + CONFIG.SHEET_NAMES.LEADS + '" nerastas.');
+    }
+
+    var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+    // Ieškome stulpelio "Statusas" (nepriklausomai nuo didžiųjų/mažųjų raidžių)
+    var statusColIndex = headers.map(function(h) { return h.toString().trim().toLowerCase(); }).indexOf('statusas');
+
+    if (statusColIndex === -1) {
+      throw new Error('Stulpelis "Statusas" nerastas.');
+    }
+
+    // Rikiuojame visą duomenų sritį (be antraščių) pagal rastą stulpelį
+    sheet.getRange(2, 1, sheet.getLastRow() - 1, sheet.getLastColumn()).sort({column: statusColIndex + 1, ascending: true});
+    Logger.log('Leads lapas sėkmingai surikiuotas pagal "Statusas".');
+  } catch (e) {
+    Logger.log('Klaida rikiuojant leads lapą: ' + e.toString());
+  }
+}
